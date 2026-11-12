@@ -4,7 +4,7 @@
 const canvas = document.getElementById('fx');
 const ctx = canvas.getContext('2d');
 const calm = matchMedia('(prefers-reduced-motion: reduce)');
-const COLORS = ['#2ff3ff', '#f4ff3a', '#3dffa0', '#ffffff'];
+const COLORS = ['#00ff41', '#d4ff3a', '#8dffb0', '#eafff0'];
 
 let parts = [];
 let raf = 0;
@@ -79,7 +79,7 @@ export const fx = {
         w: 4 + Math.random() * 10, h: 3 + Math.random() * 5,
         rot: Math.random() * 6, vr: (Math.random() - 0.5) * 10,
         life: 3.5 + Math.random() * 1.5,
-        color: pick([...COLORS, '#ff2e88']),
+        color: pick(COLORS),
       });
     }
     run();

@@ -1,6 +1,6 @@
 # Quiz Reactor
 
-A multiple-choice quiz maker with a cyber look: a WebGL shader tunnel, a 3D reactor that heats up with your streak, particle bursts and synth sounds.
+A multiple-choice quiz maker with a green-on-black hacker terminal look: a calm WebGL wireframe corridor, a 3D reactor that heats up with your streak, particle bursts and synth sounds.
 
 - Write questions by hand in the editor, with 2 to 6 answers each
 - Import questions from a CSV file, by file picker, drag and drop, or paste
@@ -51,7 +51,7 @@ Push these files to a repository, then in the repository open Settings, Pages, a
 | `index.html` | Page shell and the CSV import dialog |
 | `css/style.css` | All styling and animation |
 | `js/app.js` | Views: home, editor, play, results |
-| `js/shader.js` | WebGL background (tunnel and reactor) |
+| `js/shader.js` | WebGL background (corridor and reactor) |
 | `js/csv.js` | CSV parsing, validation and export |
 | `js/store.js` | Saving, loading and share links |
 | `js/sfx.js` | Sound effects made with WebAudio |

@@ -1,7 +1,8 @@
-// Full-screen WebGL background: a neon data tunnel with a spinning "reactor"
-// core. The core follows a DOM element (the reactor slot) and the whole scene
-// reacts to the game: speed and colour follow the streak, correct answers send
-// a wave down the tunnel, wrong answers glitch the picture.
+// Full-screen WebGL background: a dim green wireframe corridor with a slowly
+// turning "reactor" core. The corridor is kept almost still so it never
+// competes with the text. The core follows a DOM element (the reactor slot)
+// and the scene reacts to the game: colour follows the streak, a correct
+// answer sends one soft wave down the corridor, a wrong answer tints it red.
 
 const VERT = `
 attribute vec2 aPos;
@@ -15,10 +16,10 @@ uniform float uTime, uTravel, uPulse, uGlitch, uSpin, uHeat, uDim;
 uniform vec2 uLook;
 uniform vec3 uCore;
 
-const vec3 ION   = vec3(0.18, 0.95, 1.0);
-const vec3 PULSE = vec3(1.0, 0.18, 0.53);
-const vec3 VOLT  = vec3(0.96, 1.0, 0.23);
-const vec3 DEEP  = vec3(0.36, 0.26, 1.0);
+const vec3 ION   = vec3(0.0, 1.0, 0.25);
+const vec3 VOLT  = vec3(0.83, 1.0, 0.23);
+const vec3 DEEP  = vec3(0.0, 0.5, 0.28);
+const vec3 PALE  = vec3(0.72, 1.0, 0.78);
 const float CORE_Z = 7.0;
 const float FOCAL = 1.25;
 
@@ -33,39 +34,30 @@ vec3 tunnel(vec3 ro, vec3 rd){
   vec3 p = ro + rd * t;
   float side = step(tw.x, tw.y);
   float wall = side * 31.0 + step(0.0, mix(rd.y, rd.x, side)) * 57.0;
-  vec2 q = vec2(mix(p.x, p.y, side), p.z + uTravel) / 1.1;
+  vec2 q = vec2(mix(p.x, p.y, side), p.z + uTravel) / 2.2;
 
   vec2 f = abs(fract(q) - 0.5);
   float d = 0.5 - max(f.x, f.y);
-  float w = 0.01 + t * 0.0035;
+  float w = 0.005 + t * 0.0018;
   float line = 1.0 - smoothstep(0.0, w, d);
-  float glow = exp(-d * 14.0) * 0.22;
+  float glow = exp(-d * 26.0) * 0.16;
 
-  // panels that blink on and off
+  // a few panels stay faintly lit, like status lights on a server rack
   float h = hash(floor(q) + wall);
-  float blink = step(0.88, h) * (0.5 + 0.5 * sin(uTime * (1.0 + h * 5.0) + h * 40.0));
+  float lit = step(0.86, h);
 
-  // data packets running along the long lines
-  float lane = floor(q.x + 0.5);
-  float hp = hash(vec2(lane, wall + 3.0));
-  float pk = fract(q.y * 0.07 + uTime * (0.15 + hp * 0.35) + hp * 9.0);
-  float packet = smoothstep(0.93, 1.0, pk)
-               * (1.0 - smoothstep(0.0, 0.04 + w, abs(q.x - lane)))
-               * step(0.5, hp);
+  vec3 lineCol = mix(ION, DEEP, side * 0.5);
+  lineCol = mix(lineCol, VOLT, uHeat * 0.6);
+  vec3 col = lineCol * (line * 0.9 + glow);
+  col += DEEP * lit * 0.08 * smoothstep(0.0, 0.03, d);
 
-  vec3 lineCol = mix(ION, DEEP, side * 0.6);
-  lineCol = mix(lineCol, PULSE, uHeat * 0.75);
-  vec3 col = lineCol * (line * 1.1 + glow);
-  col += mix(DEEP, PULSE, h) * blink * 0.22 * smoothstep(0.0, 0.06, d);
-  col += VOLT * packet * 1.6;
-
-  // wave sent down the tunnel by a correct answer
+  // one soft wave sent down the corridor by a correct answer
   float zw = (1.0 - uPulse) * 45.0;
   float band = exp(-abs(p.z - zw) * 0.5) * uPulse;
-  col += vec3(0.4, 1.0, 0.55) * band * (line * 3.0 + 0.3);
+  col += PALE * band * (line * 1.5 + 0.1);
 
-  float fog = exp(-t * 0.06);
-  vec3 haze = mix(vec3(0.05, 0.02, 0.15), vec3(0.17, 0.02, 0.1), uHeat);
+  float fog = exp(-t * 0.075);
+  vec3 haze = mix(vec3(0.0, 0.012, 0.005), vec3(0.012, 0.03, 0.0), uHeat);
   return mix(haze, col, fog);
 }
 
@@ -97,10 +89,10 @@ vec4 core(vec3 rd){
   float t = max(-b - h, 0.0);
   float tEnd = -b + h;
 
-  vec3 hot = mix(ION, PULSE, uHeat);
+  vec3 hot = mix(ION, VOLT, uHeat);
   vec3 acc = vec3(0.0);
   float alpha = 0.0;
-  float size = 0.42 + 0.03 * sin(uTime * 2.4) + uPulse * 0.14;
+  float size = 0.42 + 0.02 * sin(uTime * 1.1) + uPulse * 0.1;
 
   for (int i = 0; i < 48; i++){
     vec3 p = oc + rd * t;
@@ -113,14 +105,14 @@ vec4 core(vec3 rd){
       float fr = pow(1.0 - abs(dot(n, spinD(rd))), 2.0);
       float e = min(po.x, min(po.y, po.z));
       float edge = 1.0 - smoothstep(0.0, 0.035, e);
-      acc += mix(vec3(0.03, 0.01, 0.1), hot, fr * 0.8 + 0.12) + VOLT * edge * 0.9;
+      acc += mix(vec3(0.0, 0.03, 0.012), hot, fr * 0.8 + 0.12) + PALE * edge * 0.9;
       alpha = 1.0;
       break;
     }
     float stp = max(min(dr + 0.015, dc), 0.012);
-    acc += hot * 0.02 * stp * rim * max(0.0, 1.0 / (0.0012 + dr * dr) - 6.0);
+    acc += hot * 0.012 * stp * rim * max(0.0, 1.0 / (0.0012 + dr * dr) - 6.0);
     float fall = 1.0 - smoothstep(0.35, 1.45, length(p));
-    acc += mix(hot, VOLT, 0.5) * 0.016 * stp * fall / (0.02 + dc * dc);
+    acc += mix(hot, PALE, 0.4) * 0.016 * stp * fall / (0.02 + dc * dc);
     t += stp;
     if (t > tEnd) break;
   }
@@ -130,38 +122,35 @@ vec4 core(vec3 rd){
 void main(){
   vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
 
-  if (uGlitch > 0.001){
-    float band = floor(gl_FragCoord.y / (uRes.y * 0.05));
-    float n = hash(vec2(band, floor(uTime * 24.0)));
-    uv.x += (n - 0.5) * 0.3 * uGlitch * step(0.55, n);
-  }
-
   vec3 rd0 = normalize(vec3(uv, FOCAL));
   vec3 rd = rd0;
-  rd.xy *= rot(sin(uTime * 0.11) * 0.05);
-  rd.xz *= rot(uLook.x * 0.12);
-  rd.yz *= rot(-uLook.y * 0.08);
-  vec3 ro = vec3(uLook.x * 0.5, uLook.y * 0.3 + sin(uTime * 0.4) * 0.05, 0.0);
+  rd.xz *= rot(uLook.x * 0.06);
+  rd.yz *= rot(-uLook.y * 0.04);
+  vec3 ro = vec3(uLook.x * 0.3, uLook.y * 0.2, 0.0);
 
-  vec3 col = tunnel(ro, rd);
+  // only the corridor is dimmed, so the reactor stays the bright thing on screen
+  vec3 col = tunnel(ro, rd) * (1.0 - uDim);
   vec4 c = core(rd0);
   col = col * (1.0 - c.a) + c.rgb;
 
-  col = mix(col, col * vec3(1.7, 0.35, 0.45) + vec3(0.12, 0.0, 0.02), uGlitch * 0.75);
-  col *= 1.0 - uDim * 0.62;
+  // a wrong answer washes the scene red for a moment (no shaking, no flicker)
+  float g = uGlitch * uGlitch;
+  col = mix(col, vec3(dot(col, vec3(0.5)) * 1.3 + 0.05, 0.0, 0.01), g * 0.7);
   col *= 1.0 - 0.3 * dot(uv, uv);
   col = 1.0 - exp(-col * 1.25);
   col *= 0.95 + 0.05 * sin(gl_FragCoord.y * 2.0);
-  col += (hash(gl_FragCoord.xy + uTime) - 0.5) * 0.025;
+  col += (hash(gl_FragCoord.xy) - 0.5) * 0.012;
   gl_FragColor = vec4(col, 1.0);
 }
 `;
 
+// speed: how fast the corridor drifts past (kept very low on purpose)
+// dim: how far the corridor is faded behind the content, look: mouse parallax
 const MODES = {
-  home:    { speed: 1.1,  dim: 0.0,  look: 1.0 },
-  edit:    { speed: 0.35, dim: 0.68, look: 0.3 },
-  play:    { speed: 2.0,  dim: 0.12, look: 0.25 },
-  results: { speed: 1.4,  dim: 0.2,  look: 0.5 },
+  home:    { speed: 0.12, dim: 0.3,  look: 0.35 },
+  edit:    { speed: 0.04, dim: 0.72, look: 0.0 },
+  play:    { speed: 0.14, dim: 0.5,  look: 0.1 },
+  results: { speed: 0.12, dim: 0.55, look: 0.2 },
 };
 
 const STUB = { setMode() {}, setHeat() {}, pulse() {}, glitch() {} };
@@ -208,7 +197,7 @@ export function initBackground(canvas) {
   const calm = matchMedia('(prefers-reduced-motion: reduce)');
   const s = {
     mode: MODES.home, slot: null,
-    speed: 1, heat: 0, heatT: 0, dim: 0,
+    speed: MODES.home.speed, heat: 0, heatT: 0, dim: MODES.home.dim,
     pulse: 0, glitch: 0, travel: 0, spin: 0, time: 0,
     core: [0, 0, 0], look: [0, 0], lookT: [0, 0],
     quality: 0.7, slow: 0,
@@ -262,7 +251,7 @@ export function initBackground(canvas) {
     } else if (s.slow > 0) s.slow--;
 
     s.heat += (s.heatT - s.heat) * ease(3);
-    s.speed += ((s.mode.speed + s.heat * 3.5) * motion - s.speed) * ease(2.5);
+    s.speed += ((s.mode.speed + s.heat * 0.2) * motion - s.speed) * ease(2.5);
     s.dim += (s.mode.dim - s.dim) * ease(4);
     s.look[0] += (s.lookT[0] * s.mode.look * motion - s.look[0]) * ease(3);
     s.look[1] += (s.lookT[1] * s.mode.look * motion - s.look[1]) * ease(3);
@@ -273,11 +262,11 @@ export function initBackground(canvas) {
       s.core[i] = jump && i < 2 ? ct[i] : s.core[i] + (ct[i] - s.core[i]) * ease(i < 2 ? 14 : 5);
     }
 
-    s.pulse = Math.max(0, s.pulse - dt / 0.9);
-    s.glitch = Math.max(0, s.glitch - dt / 0.45);
+    s.pulse = Math.max(0, s.pulse - dt / 1.2);
+    s.glitch = Math.max(0, s.glitch - dt / 0.7);
     s.time += dt;
     s.travel = (s.travel + s.speed * dt * 2.2) % 1100;
-    s.spin += dt * (0.55 + s.heat * 2.4 + s.pulse * 3) * motion;
+    s.spin += dt * (0.22 + s.heat * 0.5 + s.pulse * 1.0) * motion;
 
     gl.uniform2f(U.uRes, canvas.width, canvas.height);
     gl.uniform1f(U.uTime, s.time);
