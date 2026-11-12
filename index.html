@@ -1,16 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="hacker">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quiz Reactor</title>
-  <meta name="description" content="Make multiple-choice quizzes by hand, from a CSV file or from a PDF question paper, then play them against the clock.">
+  <meta name="description" content="Make multiple-choice quizzes by hand, from a CSV file or from a PDF question paper, then play them as a timed quiz, a themed battle or flashcards.">
   <meta name="theme-color" content="#020503">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23020503'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%2300ff41' stroke-width='2.5'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23d4ff3a'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700;800&family=Alegreya:wght@400;500;600;700&family=Chakra+Petch:wght@400;500;600;700&family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@500;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700;800&family=Monoton&family=Pirata+One&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <script>
+    // apply the saved theme before the first paint, so the page doesn't flash the default one
+    try {
+      var t = localStorage.getItem('quizreactor.theme');
+      if (['hacker', 'pirate', 'cyber', 'tomb'].indexOf(t) >= 0) document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
 </head>
 <body data-view="home">
   <canvas id="bg" aria-hidden="true"></canvas>
@@ -19,9 +26,16 @@
   <header class="topbar">
     <a class="brand" href="#/">
       <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><path d="M16 3 29 16 16 29 3 16Z" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M16 11 21 16 16 21 11 16Z" fill="var(--volt)"/></svg>
-      Quiz Reactor
+      <span>Quiz Reactor</span>
     </a>
-    <button class="link" id="sound" type="button" aria-pressed="true">Sound on</button>
+    <div class="controls">
+      <label class="theme-pick">
+        <span class="sr">Theme</span>
+        <select id="theme"></select>
+      </label>
+      <button class="link" id="music" type="button" aria-pressed="true">Music on</button>
+      <button class="link" id="sound" type="button" aria-pressed="true">Sound on</button>
+    </div>
   </header>
 
   <main id="app"></main>

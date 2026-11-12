@@ -1,11 +1,12 @@
 # Quiz Reactor
 
-A multiple-choice quiz maker with a green-on-black hacker terminal look: a calm WebGL wireframe corridor, a 3D reactor that heats up with your streak, particle bursts and synth sounds.
+A multiple-choice quiz maker with four themes, each with its own look, WebGL background, music and battle.
 
 - Write questions by hand in the editor, with 2 to 6 answers each
 - Import questions from a CSV file, by file picker, drag and drop, or paste
 - Import a PDF question paper, including scanned pages, which are read with OCR
-- Play against a per-question timer with streak multipliers
+- Play a quiz three ways: a timed quiz with streak multipliers, a battle with health bars, or flashcards
+- Pick a theme: Hacker terminal, Pirate seas, Cyberpunk city or Jungle tomb
 - Copy a share link that carries the whole quiz in the URL
 - Export any quiz back to CSV
 
@@ -20,6 +21,40 @@ python -m http.server 5173
 ```
 
 Then open http://localhost:5173.
+
+## Themes
+
+Pick a theme from the tiles on the home page or the menu in the top bar. The choice is remembered in the browser.
+
+| Theme | Background | Music | Battle |
+| --- | --- | --- | --- |
+| Hacker terminal | Green wireframe corridor | Dark, steady pulse | None, quiz and flashcards only |
+| Pirate seas | Night sea under the moon | A jig | Two ships trade cannon fire, and the crew join in with muskets |
+| Cyberpunk city | Neon skyline over a wet street | Slow synthwave | Two runners throw light discs |
+| Jungle tomb | Torch-lit stone passage | Hand drums, marimba and flute | You throw a stone-tipped spear, the gorilla throws rocks |
+
+The music is generated in the browser with WebAudio, so there are no audio files. It starts after the first click or key press, because browsers block sound before that. "Music on" and "Sound on" in the top bar turn the music and the sound effects off separately.
+
+## Ways to play
+
+### Quiz
+
+Each correct answer is worth 100 points, plus up to 50 for answering quickly. Consecutive correct answers multiply the score, up to ×2 at five in a row. The best score for each quiz is kept.
+
+### Battle
+
+Available in the Pirate seas, Cyberpunk city and Jungle tomb themes.
+
+- You and the enemy both start with 10 health for every question, so 200 each for a 20-question quiz.
+- A correct answer hits the enemy for 10. A wrong answer, or running out of time, lets the enemy hit you for 10.
+- You win by getting at least half of the questions right: 10 of 20, or 3 of 5. That is the same as finishing with at least as much health as the enemy.
+- If you lose, restart the battle to try again. Battles do not change the quiz's best score.
+
+### Flashcards
+
+Each card shows a question and its options. Turn it over to see the answer and the explanation, then mark it "Got it" or "Still learning". Cards marked "Still learning" come back at the end of the deck until every card is known.
+
+Keys: Space turns the card over, then 1 is "Still learning" and 2 is "Got it".
 
 ## CSV format
 
@@ -58,10 +93,6 @@ Answer: B
 
 The same layout also works as plain text pasted into the import dialog.
 
-## Scoring
-
-Each correct answer is worth 100 points, plus up to 50 for answering quickly. Consecutive correct answers multiply the score, up to ×2 at five in a row.
-
 ## Put it on GitHub Pages
 
 Push these files to a repository, then in the repository open Settings, Pages, and choose "Deploy from a branch" with the `main` branch and the `/ (root)` folder.
@@ -71,12 +102,16 @@ Push these files to a repository, then in the repository open Settings, Pages, a
 | File | What it does |
 | --- | --- |
 | `index.html` | Page shell and the import dialog |
-| `css/style.css` | All styling and animation |
-| `js/app.js` | Views: home, editor, play, results |
-| `js/shader.js` | WebGL background (corridor and reactor) |
+| `css/style.css` | All styling and animation, including the colours and fonts of each theme |
+| `js/app.js` | Views: home, editor, quiz and battle, flashcards, results |
+| `js/themes.js` | The four themes: names, wording, background scene, battle text |
+| `js/shader.js` | WebGL backgrounds (one scene per theme) and the reactor |
+| `js/battle.js` | The battle arena: health bars and the three drawn fights |
+| `js/music.js` | The four songs and the synth that plays them |
+| `js/sfx.js` | Sound effects made with WebAudio |
+| `js/audio.js` | The audio context shared by music and sound effects |
+| `js/fx.js` | Particle bursts |
 | `js/csv.js` | CSV parsing, validation and export |
 | `js/pdf.js` | Reading text out of a PDF, with OCR for scanned pages |
 | `js/paper.js` | Turning question-paper text into questions |
 | `js/store.js` | Saving, loading and share links |
-| `js/sfx.js` | Sound effects made with WebAudio |
-| `js/fx.js` | Particle bursts |

@@ -4,7 +4,7 @@
 const canvas = document.getElementById('fx');
 const ctx = canvas.getContext('2d');
 const calm = matchMedia('(prefers-reduced-motion: reduce)');
-const COLORS = ['#00ff41', '#d4ff3a', '#8dffb0', '#eafff0'];
+let COLORS = ['#00ff41', '#d4ff3a', '#8dffb0', '#eafff0'];
 
 let parts = [];
 let raf = 0;
@@ -52,6 +52,11 @@ function run() {
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 export const fx = {
+  /** The default particle colours follow the theme. */
+  setColors(list) {
+    const clean = list.filter(Boolean);
+    if (clean.length) COLORS = clean;
+  },
   burst(x, y, { count = 34, power = 520, colors = COLORS } = {}) {
     if (calm.matches) return;
     for (let i = 0; i < count; i++) {

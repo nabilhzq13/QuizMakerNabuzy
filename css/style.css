@@ -1,10 +1,18 @@
 /* Quiz Reactor
-   Palette: a green phosphor terminal. void (black), ion (neon green, the main
-   accent), volt (lime, for highlights), pulse (red, only for wrong answers),
-   text (pale green).
-   Type: JetBrains Mono for display, numbers and CSV; IBM Plex Sans for reading. */
 
-:root {
+   Four themes, picked with data-theme on <html> (and on the theme tiles, so
+   each tile previews its own look):
+
+   hacker  green phosphor terminal      JetBrains Mono + IBM Plex Sans
+   pirate  lantern-lit night at sea     Pirata One, Alegreya SC + Alegreya
+   cyber   neon street in the rain      Monoton, Chakra Petch
+   tomb    jade relic in a torch-lit tomb   Cinzel Decorative, Cinzel + Alegreya
+
+   Every theme sets the same tokens:
+   void (page), panel, panel-2, line (borders), ion (main accent), volt
+   (highlight), pulse (wrong / danger), ok (correct), text, muted. */
+
+:root, [data-theme="hacker"] {
   --void: #020503;
   --panel: #06100a;
   --panel-2: #0b1c12;
@@ -15,10 +23,134 @@
   --ok: #00ff41;
   --text: #dcffe6;
   --muted: #86b598;
+  --field: #020804;
+  --placeholder: #5f8f70;
+  --ok-fill: #063a1a;
+  --bad-fill: #3a0a10;
+  --ok-edge: #14803a;
+  --bad-edge: #a3232f;
+  --bad-soft: #ff8a94;
+  --warn-edge: #7f9a22;
+
+  --title: "JetBrains Mono", ui-monospace, Consolas, monospace;
   --display: "JetBrains Mono", ui-monospace, Consolas, monospace;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --title-weight: 800;
+  --title-scale: 1;
+  --title-lh: .92;
+  --title-track: -.04em;
+  --title-case: uppercase;
+  --title-ink: var(--ion);
+  --title-glow: 0 0 30px color-mix(in srgb, var(--ion) 45%, transparent);
+  --prompt: "> ";
+  --cursor: "_";
 }
+
+[data-theme="pirate"] {
+  --void: #050b16;
+  --panel: #0b1626;
+  --panel-2: #12233a;
+  --line: #2f4b68;
+  --ion: #f4b63f;
+  --pulse: #ef4a4a;
+  --volt: #ffe7a3;
+  --ok: #4fd69a;
+  --text: #f4ead2;
+  --muted: #a8b4c2;
+  --field: #070f1c;
+  --placeholder: #6b7c8f;
+  --ok-fill: #0d3a2b;
+  --bad-fill: #3d1114;
+  --ok-edge: #2a8f68;
+  --bad-edge: #a33232;
+  --bad-soft: #ff9a94;
+  --warn-edge: #a8832c;
+
+  --title: "Pirata One", "Alegreya SC", Georgia, serif;
+  --display: "Alegreya SC", Georgia, serif;
+  --body: "Alegreya", Georgia, serif;
+  --title-weight: 400;
+  --title-scale: 1.16;
+  --title-lh: .88;
+  --title-track: .01em;
+  --title-case: none;
+  --title-ink: var(--ion);
+  --title-glow: 0 3px 0 #5b3a08, 0 0 34px color-mix(in srgb, var(--ion) 35%, transparent);
+  --prompt: "";
+  --cursor: "";
+}
+
+[data-theme="cyber"] {
+  --void: #07040f;
+  --panel: #110a22;
+  --panel-2: #1b1036;
+  --line: #4b2a8c;
+  --ion: #ff2bd6;
+  --pulse: #ff5a3c;
+  --volt: #29f0ff;
+  --ok: #3dffa8;
+  --text: #f2eaff;
+  --muted: #a79acb;
+  --field: #0a0616;
+  --placeholder: #6f6396;
+  --ok-fill: #0a3a2c;
+  --bad-fill: #401410;
+  --ok-edge: #1f9a6c;
+  --bad-edge: #b23a22;
+  --bad-soft: #ffa08c;
+  --warn-edge: #1f8f9a;
+
+  --title: "Monoton", "Chakra Petch", sans-serif;
+  --display: "Chakra Petch", "Segoe UI", sans-serif;
+  --body: "Chakra Petch", "Segoe UI", sans-serif;
+  --title-weight: 400;
+  --title-scale: .72;
+  --title-lh: 1.08;
+  --title-track: .02em;
+  --title-case: uppercase;
+  --title-ink: #ffd0f6;
+  --title-glow: 0 0 6px #fff9, 0 0 18px var(--ion), 0 0 46px var(--ion);
+  --prompt: "";
+  --cursor: "";
+}
+
+[data-theme="tomb"] {
+  --void: #080a06;
+  --panel: #12140d;
+  --panel-2: #1c2014;
+  --line: #4a4d2c;
+  --ion: #37e2b0;
+  --pulse: #f0563a;
+  --volt: #ffb648;
+  --ok: #8fe35c;
+  --text: #f1e9d2;
+  --muted: #aeb092;
+  --field: #0b0d08;
+  --placeholder: #77795c;
+  --ok-fill: #1c3a14;
+  --bad-fill: #3c140c;
+  --ok-edge: #4f9a2c;
+  --bad-edge: #a8391f;
+  --bad-soft: #ff9d86;
+  --warn-edge: #a0742a;
+
+  --title: "Cinzel Decorative", "Cinzel", Georgia, serif;
+  --display: "Cinzel", Georgia, serif;
+  --body: "Alegreya", Georgia, serif;
+  --title-weight: 900;
+  --title-scale: .7;
+  --title-lh: 1.04;
+  --title-track: .02em;
+  --title-case: uppercase;
+  --title-ink: var(--ion);
+  --title-glow: 0 -1px 0 #c8ffe9aa, 0 3px 0 #06281d, 0 0 30px color-mix(in srgb, var(--ion) 30%, transparent);
+  --prompt: "";
+  --cursor: "";
+}
+
+/* Alegreya runs small, so the two themes that read in it get slightly larger type. */
+html[data-theme="pirate"], html[data-theme="tomb"] { font-size: 106.25%; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -35,9 +167,9 @@ body {
 
 body.no-gl {
   background:
-    linear-gradient(rgba(0, 255, 65,.07) 1px, transparent 1px) 0 0 / 48px 48px,
-    linear-gradient(90deg, rgba(0, 255, 65,.07) 1px, transparent 1px) 0 0 / 48px 48px,
-    radial-gradient(ellipse at 50% 40%, #04200e, var(--void) 70%);
+    linear-gradient(color-mix(in srgb, var(--ion) 7%, transparent) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(90deg, color-mix(in srgb, var(--ion) 7%, transparent) 1px, transparent 1px) 0 0 / 48px 48px,
+    radial-gradient(ellipse at 50% 40%, var(--panel-2), var(--void) 70%);
 }
 
 #bg, #fx { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
@@ -51,7 +183,12 @@ a { color: var(--ion); }
 
 :focus-visible { outline: 2px solid var(--volt); outline-offset: 3px; }
 
-/* ---------- chamfered corners ---------- */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- panel shapes ----------
+   A panel is its edge colour with the fill laid on top, 1.5px in. The corner
+   treatment changes with the theme: chamfered (hacker, cyber), rounded like a
+   brass plate (pirate), stepped like cut stone (tomb). */
 
 .cut {
   --c: 16px;
@@ -60,7 +197,6 @@ a { color: var(--ion); }
   position: relative;
   isolation: isolate;
   background: var(--edge);
-  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
 }
 .cut::before {
   content: "";
@@ -69,6 +205,22 @@ a { color: var(--ion); }
   z-index: -1;
   background: var(--fill);
   clip-path: inherit;
+}
+.cut, .btn, #toast {
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+}
+
+[data-theme="pirate"] :is(.cut, .btn, #toast) { clip-path: none; border-radius: 9px; }
+[data-theme="pirate"] :is(.cut, .btn.ghost)::before { border-radius: 7.5px; }
+
+[data-theme="tomb"] :is(.cut, .btn, #toast) {
+  --s: calc(var(--c) / 2);
+  clip-path: polygon(
+    var(--c) 0, 100% 0, 100% calc(100% - var(--c)),
+    calc(100% - var(--s)) calc(100% - var(--c)), calc(100% - var(--s)) calc(100% - var(--s)),
+    calc(100% - var(--c)) calc(100% - var(--s)), calc(100% - var(--c)) 100%,
+    0 100%, 0 var(--c),
+    var(--s) var(--c), var(--s) var(--s), var(--c) var(--s));
 }
 
 /* ---------- buttons ---------- */
@@ -85,7 +237,6 @@ a { color: var(--ion); }
   letter-spacing: .03em;
   color: var(--void);
   background: var(--ion);
-  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
   cursor: pointer;
   transition: background .12s, transform .12s;
 }
@@ -117,7 +268,7 @@ a { color: var(--ion); }
   color: var(--ion);
   font: 500 .95rem var(--body);
   text-decoration: underline;
-  text-decoration-color: rgba(0, 255, 65,.4);
+  text-decoration-color: color-mix(in srgb, var(--ion) 40%, transparent);
   text-underline-offset: 4px;
   cursor: pointer;
 }
@@ -152,6 +303,7 @@ a { color: var(--ion); }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: .5rem 1rem;
   padding: .9rem clamp(1rem, 4vw, 2.5rem);
 }
 .brand {
@@ -162,10 +314,22 @@ a { color: var(--ion); }
   font: 700 1.05rem var(--display);
   letter-spacing: .06em;
   text-decoration: none;
+  white-space: nowrap;
 }
-.brand svg { color: var(--ion); }
+.brand svg { color: var(--ion); flex: none; }
 .brand:hover svg { animation: spin 1.2s linear; }
 body[data-view="home"] .brand { visibility: hidden; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .3rem 1.1rem; margin-left: auto; }
+.theme-pick select {
+  width: auto;
+  padding: .3rem .5rem;
+  font: 500 .92rem var(--display);
+  color: var(--ion);
+  cursor: pointer;
+}
+/* the theme decides what a battle looks like, so it can't change mid-game */
+body[data-view="play"] .theme-pick { display: none; }
 
 main {
   position: relative;
@@ -182,23 +346,23 @@ main {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
   align-items: center;
   gap: 2rem;
-  min-height: min(62vh, 560px);
-  padding: 1rem 0 2.5rem;
+  min-height: min(56vh, 520px);
+  padding: 1rem 0 2rem;
 }
 .hero-copy { display: grid; gap: 1.4rem; justify-items: start; }
 .hero .reactor-slot { aspect-ratio: 1; width: 100%; max-width: 440px; justify-self: center; }
 
 .hero h1 {
   position: relative;
-  font: 800 clamp(3.2rem, 9vw, 6.4rem)/.92 var(--display);
-  letter-spacing: -.04em;
-  text-transform: uppercase;
-  color: var(--ion);
-  text-shadow: 0 0 30px rgba(0, 255, 65, .45);
+  font: var(--title-weight) calc(clamp(3.2rem, 9vw, 6.4rem) * var(--title-scale)) / var(--title-lh) var(--title);
+  letter-spacing: var(--title-track);
+  text-transform: var(--title-case);
+  color: var(--title-ink);
+  text-shadow: var(--title-glow);
 }
 .hero h1 span { display: block; }
-/* terminal cursor after the title */
-.hero h1 span:last-child::after { content: "_"; color: var(--volt); animation: cursor 1.3s steps(1) infinite; }
+/* terminal cursor after the title (hacker theme only) */
+.hero h1 span:last-child::after { content: var(--cursor); color: var(--volt); animation: cursor 1.3s steps(1) infinite; }
 .glitch::before, .glitch::after {
   content: attr(data-text);
   position: absolute;
@@ -206,34 +370,63 @@ main {
   white-space: pre-line;
   pointer-events: none;
   opacity: 0;
+  text-shadow: none;
 }
 .glitch::before { color: var(--text); }
 .glitch::after { color: var(--volt); }
 .glitch.boot::before, .glitch:hover::before { animation: glitch-a .7s steps(2, end) 1; }
 .glitch.boot::after, .glitch:hover::after { animation: glitch-b .7s steps(2, end) 1; }
+/* a glitching title belongs to the two electronic themes */
+:is([data-theme="pirate"], [data-theme="tomb"]) .glitch::before,
+:is([data-theme="pirate"], [data-theme="tomb"]) .glitch::after { display: none; }
 
 .lede { max-width: 34rem; font-size: 1.15rem; color: var(--text); text-shadow: 0 1px 12px var(--void); }
 
-.deck h2, .results h3 {
+.deck h2, .worlds h2, .results h3 {
   font: 700 1.5rem var(--display);
   letter-spacing: .02em;
   margin-bottom: 1rem;
 }
-/* shell prompt in front of section headings */
-.deck h2::before, .results h3::before { content: "> "; color: var(--ion); }
+/* shell prompt in front of section headings (hacker theme only) */
+.deck h2::before, .worlds h2::before, .results h3::before { content: var(--prompt); color: var(--ion); }
+
+/* theme tiles: each one carries its own data-theme, so it shows its own colours and type */
+.worlds { margin-bottom: 2.6rem; }
+.world-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; }
+.world {
+  display: grid;
+  gap: .3rem;
+  align-content: start;
+  padding: .85rem .95rem 1rem;
+  border: 1.5px solid var(--line);
+  border-top: 4px solid var(--ion);
+  background: linear-gradient(165deg, var(--panel-2), var(--void) 85%);
+  color: var(--text);
+  font: 400 1rem/1.4 var(--body);
+  text-align: left;
+  cursor: pointer;
+  transition: transform .12s, border-color .12s, box-shadow .12s;
+}
+.world strong { font: 700 1.08rem/1.2 var(--display); letter-spacing: .02em; color: var(--ion); }
+.world span { font-size: .9rem; color: var(--muted); }
+.world em { font: 700 .8rem var(--display); font-style: normal; letter-spacing: .05em; color: var(--volt); }
+.world:hover { transform: translateY(-2px); border-color: var(--ion); }
+.world[aria-checked="true"] { border-color: var(--ion); box-shadow: 0 0 0 1px var(--ion), 0 0 24px color-mix(in srgb, var(--ion) 30%, transparent); }
+
 .cards {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
   gap: 1.1rem;
 }
 .card { padding: 1.3rem 1.3rem 1.1rem; display: grid; gap: .35rem; align-content: start; }
 .card h3 { font: 700 1.3rem/1.2 var(--display); overflow-wrap: anywhere; }
 .card .meta { color: var(--muted); }
 .card .best { color: var(--volt); font: 500 .95rem var(--display); letter-spacing: .02em; }
-.card .row { margin-top: .7rem; }
+.card .row { margin-top: .7rem; gap: .5rem; }
+.card .row .btn { padding: .62em 1em; font-size: .95rem; }
 .card .row.minor { margin-top: .2rem; gap: .3rem 1.1rem; }
 .card.fresh { animation: fresh 1.4s ease-out 1; }
 .empty { color: var(--muted); padding: 2rem 0; }
@@ -253,7 +446,7 @@ main {
 input[type="text"], textarea, select {
   width: 100%;
   padding: .6rem .75rem;
-  background: #020804;
+  background: var(--field);
   border: 1px solid var(--line);
   border-radius: 0;
   color: var(--text);
@@ -262,9 +455,9 @@ textarea { resize: vertical; field-sizing: content; min-height: 3.2rem; }
 input[type="text"]:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--ion);
-  box-shadow: 0 0 0 1px var(--ion), 0 0 18px rgba(0, 255, 65,.25);
+  box-shadow: 0 0 0 1px var(--ion), 0 0 18px color-mix(in srgb, var(--ion) 25%, transparent);
 }
-::placeholder { color: #5f8f70; opacity: 1; }
+::placeholder { color: var(--placeholder); opacity: 1; }
 
 .check { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; }
 .check input { width: 1.1rem; height: 1.1rem; accent-color: var(--ion); }
@@ -305,15 +498,15 @@ input[type="text"]:focus, textarea:focus, select:focus {
   transition: background .12s, color .12s;
 }
 .pick:hover span { border-color: var(--ok); color: var(--ok); }
-.pick input:checked + span { background: var(--ok); border-color: var(--ok); color: var(--void); box-shadow: 0 0 16px rgba(0, 255, 65, .45); }
+.pick input:checked + span { background: var(--ok); border-color: var(--ok); color: var(--void); box-shadow: 0 0 16px color-mix(in srgb, var(--ok) 45%, transparent); }
 .pick input:focus-visible + span { outline: 2px solid var(--volt); outline-offset: 2px; }
 .opt:has(.pick input:checked) input[type="text"] { border-color: var(--ok); }
 
 .qcard .link { justify-self: start; }
 .issue { color: var(--volt); font-size: .9rem; }
 .issue:empty { display: none; }
-/* a question that can't be played yet gets a lime edge, so it is easy to spot in a long list */
-.qcard:has(.issue:not(:empty)) { --edge: #7f9a22; }
+/* a question that can't be played yet gets a highlighted edge, so it is easy to spot in a long list */
+.qcard:has(.issue:not(:empty)) { --edge: var(--warn-edge); }
 
 .editor-foot {
   position: sticky;
@@ -350,9 +543,12 @@ input[type="text"]:focus, textarea:focus, select:focus {
   min-width: 5ch;
   text-align: right;
   font: 800 1.7rem/1 var(--display);
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 18px rgba(0, 255, 65,.5);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--ion) 50%, transparent);
+  white-space: nowrap;
 }
+.score small { font-size: .6em; font-weight: 500; color: var(--muted); text-shadow: none; }
+/* the heaviest Alegreya SC closes up its zero at this size */
+[data-theme="pirate"] .score { font-weight: 700; }
 .gain {
   position: absolute;
   right: 0;
@@ -373,7 +569,7 @@ input[type="text"]:focus, textarea:focus, select:focus {
   font: 700 1rem var(--display);
   letter-spacing: .05em;
   color: var(--volt);
-  text-shadow: 0 0 14px rgba(212, 255, 58,.6), 0 1px 6px var(--void);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--volt) 60%, transparent), 0 1px 6px var(--void);
   transform: translateY(1.2rem);
 }
 .streak.bump { animation: bump .35s; }
@@ -425,9 +621,9 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .answer:focus-visible { --edge: var(--volt); outline: none; }
 .answer:focus-visible::before { inset: 3px; }
 .answer:disabled { cursor: default; }
-.answer.correct { --edge: var(--ok); --fill: #063a1a; }
+.answer.correct { --edge: var(--ok); --fill: var(--ok-fill); }
 .answer.correct kbd { background: var(--ok); border-color: var(--ok); color: var(--void); }
-.answer.wrong { --edge: var(--pulse); --fill: #3a0a10; animation: shake .4s; }
+.answer.wrong { --edge: var(--pulse); --fill: var(--bad-fill); animation: shake .4s; }
 .answer.wrong kbd { background: var(--pulse); border-color: var(--pulse); color: var(--void); }
 .answer.dim { opacity: .45; }
 
@@ -435,7 +631,7 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .verdict {
   flex: 1 1 320px;
   padding: .8rem 1rem;
-  background: rgba(2, 8, 4, .92);
+  background: color-mix(in srgb, var(--void) 92%, transparent);
   border-left: 3px solid var(--line);
   animation: rise .3s ease-out backwards;
 }
@@ -446,6 +642,7 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .verdict.ok strong { color: var(--ok); }
 .verdict.bad strong { color: var(--pulse); }
 .verdict p { color: var(--text); margin-top: .3rem; max-width: 60ch; }
+.verdict p.blow { color: var(--muted); }
 
 .countdown {
   position: fixed;
@@ -454,22 +651,92 @@ input[type="text"]:focus, textarea:focus, select:focus {
   display: grid;
   place-items: center;
   pointer-events: none;
-  font: 800 clamp(7rem, 30vw, 16rem)/1 var(--display);
+  font: var(--title-weight) clamp(7rem, 30vw, 16rem)/1 var(--title);
   color: var(--volt);
-  text-shadow: 0 0 60px rgba(212, 255, 58,.6);
+  text-shadow: 0 0 60px color-mix(in srgb, var(--volt) 60%, transparent);
 }
 .countdown span { animation: count .55s ease-out both; }
 .play.waiting > :not(.hud):not(.countdown) { visibility: hidden; }
+
+/* ---------- battle ---------- */
+
+/* the arena stays pinned while the page scrolls to the verdict, so the health bars are always in view */
+.arena-wrap { position: sticky; top: .4rem; z-index: 4; }
+.arena-wrap .streak { position: absolute; inset: auto 0 .45rem 0; text-align: center; transform: none; pointer-events: none; }
+.arena-wrap .streak.bump { animation-name: bump-flat; }
+
+.arena { --c: 16px; display: grid; gap: .5rem; padding: .7rem .8rem 0; width: 100%; overflow: hidden; }
+.hp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .3rem 1rem; align-items: end; }
+.hp-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; font: 700 .92rem var(--display); letter-spacing: .03em; }
+.hp.foe .hp-top { flex-direction: row-reverse; }
+.hp-num { font-weight: 500; color: var(--muted); white-space: nowrap; }
+.hp-bar { height: 11px; background: rgba(255, 255, 255, .13); overflow: hidden; }
+.hp-bar i { display: block; height: 100%; background: var(--ok); transform-origin: left center; transition: transform .4s cubic-bezier(.2, .8, .3, 1), background .2s; }
+.hp.foe .hp-bar i { background: var(--pulse); transform-origin: right center; }
+.hp.you.low .hp-bar i { background: var(--volt); }
+.hp.hurt .hp-bar { animation: hp-hurt .4s; }
+.hp-goal { font: 500 .85rem var(--display); letter-spacing: .03em; color: var(--muted); white-space: nowrap; }
+
+.stage { display: block; width: calc(100% + 1.6rem); margin: 0 -.8rem; height: clamp(120px, 25vh, 230px); }
+.stage .react, .stage .bob, .stage .breathe, .stage .flame { transform-box: fill-box; transform-origin: 50% 100%; }
+.stage .bob { animation: bob 5.6s ease-in-out infinite alternate; }
+.stage .foe .bob { animation-duration: 6.4s; animation-delay: -2.3s; }
+.stage .breathe { animation: breathe 3s ease-in-out infinite alternate; }
+.stage .foe .breathe { animation-delay: -1.2s; }
+.stage .flame { animation: flame 1.7s ease-in-out infinite alternate; }
+.stage .sea { animation: drift 18s linear infinite; }
+.stage .sea.mid { animation-duration: 12s; animation-direction: reverse; }
+.stage .sea.front { animation-duration: 9s; }
+.stage .react { transition: transform 2.4s cubic-bezier(.5, 0, .8, .6), opacity 2.4s ease-in; }
+.stage .react.hit { animation: hit .45s ease-out; }
+.stage .won .react { animation: cheer .45s ease-in-out 4 alternate; }
+
+/* how the loser leaves: the ship sinks, the runner flickers out, the gorilla backs into the tomb */
+.arena[data-scene="pirate"] .sunk .react { transform: translateY(78px) rotate(-17deg); opacity: 0; }
+.arena[data-scene="cyber"] .sunk .react { transform: scale(1.1, .03); opacity: 0; transition-duration: .8s; }
+.arena[data-scene="tomb"] .foe.sunk .react { transform: translateX(-80px); opacity: 0; transition-duration: 1.6s; }
+.arena[data-scene="tomb"] .you.sunk .react { transform: translateY(6px) rotate(-86deg); opacity: .55; transition-duration: .9s; }
+
+/* ---------- flashcards ---------- */
+
+.study { max-width: 760px; margin: 0 auto; display: grid; gap: 1.1rem; }
+.tally { font: 700 1rem var(--display); letter-spacing: .03em; color: var(--muted); white-space: nowrap; }
+.flash { perspective: 1400px; cursor: pointer; }
+.flash:focus-visible { outline-offset: 6px; }
+.flash-inner { display: grid; transform-style: preserve-3d; transition: transform .55s cubic-bezier(.3, .8, .3, 1); }
+.flash.flipped .flash-inner { transform: rotateY(180deg); }
+.flash.snap .flash-inner { transition: none; }
+.flash.in { animation: card-in .3s ease-out; }
+.flash-face {
+  --c: 22px;
+  grid-area: 1 / 1;
+  min-height: clamp(240px, 42vh, 380px);
+  padding: 1.6rem 1.7rem;
+  display: grid;
+  gap: .8rem;
+  align-content: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flash-face.reverse { transform: rotateY(180deg); --edge: var(--ok); }
+.flash-face.reverse .qtext { color: var(--ok); }
+.flash-face .qtext { animation: none; text-shadow: none; }
+.flash-face .ex { color: var(--muted); max-width: 60ch; }
+.flash-opts { margin: 0; padding: 0; list-style: none; display: grid; gap: .3rem; color: var(--muted); counter-reset: opt; }
+.flash-opts li { counter-increment: opt; }
+.flash-opts li::before { content: counter(opt, upper-alpha) ". "; font-family: var(--display); color: var(--ion); }
+.study-keys { text-align: center; }
 
 /* ---------- results ---------- */
 
 .results { max-width: 760px; margin: 0 auto; display: grid; gap: 1rem; justify-items: center; text-align: center; }
 .results .reactor-slot { height: clamp(120px, 22vh, 220px); width: 100%; }
-.rank { font: 700 clamp(1.6rem, 5vw, 2.6rem) var(--display); letter-spacing: .04em; color: var(--ion); text-shadow: 0 0 24px rgba(0, 255, 65,.5); }
+.rank { font: 700 clamp(1.6rem, 5vw, 2.6rem) var(--display); letter-spacing: .04em; color: var(--ion); text-shadow: 0 0 24px color-mix(in srgb, var(--ion) 50%, transparent); }
+.rank.lost { color: var(--pulse); text-shadow: 0 0 24px color-mix(in srgb, var(--pulse) 50%, transparent); }
+.outcome { max-width: 46ch; color: var(--muted); }
 .bigscore {
-  font: 800 clamp(4.5rem, 17vw, 9rem)/.9 var(--display);
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 44px rgba(0, 255, 65,.45);
+  font: var(--title-weight) calc(clamp(4.5rem, 17vw, 9rem) * var(--title-scale)) / .95 var(--title);
+  text-shadow: 0 0 44px color-mix(in srgb, var(--ion) 45%, transparent);
 }
 .newbest { color: var(--volt); font: 700 1.1rem var(--display); letter-spacing: .05em; animation: blink 1s steps(2, start) 3; }
 .stats { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem 2.4rem; margin: .4rem 0 .6rem; }
@@ -480,22 +747,22 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .results h3 { margin: 1.6rem 0 0; justify-self: start; }
 .review { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: .7rem; text-align: left; counter-reset: r; }
 .review li { --c: 12px; padding: .9rem 1.1rem; display: grid; gap: .2rem; counter-increment: r; }
-.review li.ok { --edge: #14803a; }
-.review li.bad { --edge: #a3232f; }
+.review li.ok { --edge: var(--ok-edge); }
+.review li.bad { --edge: var(--bad-edge); }
 .review .rq { font-weight: 600; }
 .review .rq::before { content: counter(r) ". "; color: var(--muted); }
-.review .yours.bad { color: #ff8a94; }
+.review .yours.bad { color: var(--bad-soft); }
 .review .yours.ok, .review .right { color: var(--ok); }
 .review .ex { color: var(--muted); }
 
-/* ---------- CSV dialog ---------- */
+/* ---------- import dialog ---------- */
 
 .modal { border: 0; padding: 0; background: transparent; color: var(--text); width: min(680px, 94vw); max-height: 92dvh; overflow: visible; }
-.modal::backdrop { background: rgba(0, 3, 1, .8); backdrop-filter: blur(5px); }
+.modal::backdrop { background: color-mix(in srgb, var(--void) 80%, transparent); backdrop-filter: blur(5px); }
 .modal[open] .modal-body { animation: key-in .35s cubic-bezier(.2, .9, .3, 1.1); transform-origin: top center; }
 .modal-body { --c: 20px; --edge: var(--ion); padding: 1.6rem; display: grid; gap: .85rem; max-height: 92dvh; overflow-y: auto; }
 .modal h2 { font: 700 1.5rem var(--display); }
-.format { margin: 0; padding: .6rem .8rem; background: #020804; border-left: 3px solid var(--ion); font: .88rem var(--mono); white-space: pre-wrap; color: var(--ion); }
+.format { margin: 0; padding: .6rem .8rem; background: var(--field); border-left: 3px solid var(--ion); font: .88rem var(--mono); white-space: pre-wrap; color: var(--ion); }
 #imp-text { font: .88rem/1.5 var(--mono); max-height: 11rem; }
 
 .drop {
@@ -510,24 +777,24 @@ input[type="text"]:focus, textarea:focus, select:focus {
 }
 .drop span { color: var(--muted); font-size: .92rem; }
 .drop strong { font: 700 1.1rem var(--display); }
-.drop:hover, .drop.over, .drop:focus-within { border-color: var(--ion); background: rgba(0, 255, 65,.07); }
+.drop:hover, .drop.over, .drop:focus-within { border-color: var(--ion); background: color-mix(in srgb, var(--ion) 7%, transparent); }
 .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 
 .report:empty { display: none; }
-.report { padding: .7rem .9rem; background: #020804; border-left: 3px solid var(--ok); font-size: .93rem; }
+.report { padding: .7rem .9rem; background: var(--field); border-left: 3px solid var(--ok); font-size: .93rem; }
 .report.warn { border-left-color: var(--volt); }
 .report.fail { border-left-color: var(--pulse); }
 .report.busy { border-left-color: var(--ion); color: var(--ion); font-family: var(--mono); }
 .report.busy::after { content: "_"; animation: cursor 1s steps(1) infinite; }
 .report p { margin-top: .35rem; color: var(--muted); }
+.report ul { margin: .35rem 0 0; padding-left: 1.1rem; color: var(--muted); }
 
-.help { border: 1px solid var(--line); background: #020804; }
+.help { border: 1px solid var(--line); background: var(--field); }
 .help summary { padding: .5rem .8rem; cursor: pointer; font: 500 .92rem var(--display); color: var(--ion); }
 .help summary:hover { color: var(--volt); }
 .help[open] { padding-bottom: .7rem; }
 .help > :not(summary) { margin: .45rem .8rem 0; }
 .help .format { border-left: 0; padding: 0; }
-.report ul { margin: .35rem 0 0; padding-left: 1.1rem; color: var(--muted); }
 .modal-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: .3rem; }
 
 body.dragging::after {
@@ -538,7 +805,7 @@ body.dragging::after {
   display: grid;
   place-items: center;
   border: 2px dashed var(--ion);
-  background: rgba(1, 5, 2, .9);
+  background: color-mix(in srgb, var(--void) 90%, transparent);
   font: 700 1.6rem var(--display);
   color: var(--ion);
   pointer-events: none;
@@ -547,6 +814,7 @@ body.dragging::after {
 /* ---------- toast ---------- */
 
 #toast {
+  --c: 10px;
   position: fixed;
   left: 50%;
   top: 1rem;
@@ -558,11 +826,16 @@ body.dragging::after {
   background: var(--volt);
   color: var(--void);
   font: 600 1rem var(--body);
-  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
   transition: transform .25s cubic-bezier(.2, .9, .3, 1.2), visibility 0s .25s;
   pointer-events: none;
 }
 #toast.show { transform: translate(-50%, 0); visibility: visible; transition-delay: 0s; }
+
+/* ---------- figures ----------
+   Scores and counters use full-height, fixed-width digits, even in the two
+   themes whose serif defaults to old-style ones. This comes after the rules
+   above because the `font` shorthand resets it. */
+.score, .hp-num, .tally, .stats dd, .bigscore, .countdown, .qcount, .card .best, .card .meta, .outcome { font-variant-numeric: lining-nums tabular-nums; }
 
 /* ---------- motion ---------- */
 
@@ -571,11 +844,13 @@ body.dragging::after {
 @keyframes cursor { 50% { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
 @keyframes bump { 40% { transform: translateY(1.2rem) scale(1.35); } }
+@keyframes bump-flat { 40% { transform: scale(1.3); } }
 @keyframes key-in { from { opacity: 0; transform: perspective(800px) rotateX(-75deg) translateY(18px); } }
 @keyframes decode { from { opacity: 0; letter-spacing: .25em; filter: blur(6px); } }
 @keyframes gain { from { opacity: 0; transform: translateY(8px); } 20% { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-14px); } }
 @keyframes count { from { opacity: 0; transform: scale(2.4); } 30% { opacity: 1; } to { opacity: 0; transform: scale(.7); } }
 @keyframes fresh { from { --edge: var(--volt); box-shadow: 0 0 0 var(--volt); filter: brightness(1.8); } }
+@keyframes card-in { from { opacity: 0; transform: translateX(26px); } }
 @keyframes shake {
   20% { transform: translateX(-9px); }
   40% { transform: translateX(8px); }
@@ -597,17 +872,41 @@ body.dragging::after {
   100% { opacity: 0; transform: none; }
 }
 
+/* battle scene */
+@keyframes bob { from { transform: translateY(-1.5px) rotate(-1.2deg); } to { transform: translateY(2px) rotate(1.4deg); } }
+@keyframes breathe { to { transform: scaleY(1.02); } }
+@keyframes flame { to { transform: scale(1.07, 1.16); } }
+@keyframes drift { to { transform: translateX(var(--len, 80px)); } }
+@keyframes hit {
+  15% { transform: translate(-9px, -2px) rotate(-3deg); filter: brightness(2.3); }
+  45% { transform: translate(4px, 1px) rotate(1.5deg); }
+}
+@keyframes cheer { to { transform: translateY(-7px); } }
+@keyframes hp-hurt { 30% { filter: brightness(2.4); } }
+
 /* ---------- small screens ---------- */
 
 @media (max-width: 760px) {
   .hero { grid-template-columns: 1fr; min-height: 0; gap: .5rem; }
   .hero .reactor-slot { order: -1; max-width: 240px; }
+  .world-row { grid-template-columns: 1fr 1fr; }
   .answers { grid-template-columns: 1fr; gap: .6rem; }
   .answer { min-height: 3.4rem; }
   .play .reactor-slot { height: clamp(76px, 13vh, 120px); }
   .play { gap: .7rem; }
   .editor-head { grid-template-columns: 1fr; }
   .saved { width: 100%; margin: 0; order: 5; }
+  .brand span { display: none; }
+  .controls { gap: .3rem .75rem; }
+  .theme-pick select { max-width: 8.6rem; font-size: .85rem; }
+  .hp-row { grid-template-columns: 1fr 1fr; }
+  .hp-top { font-size: .8rem; gap: .3rem; }
+  .hp-name { white-space: nowrap; }
+  .hp-num { font-size: .76rem; }
+  .hp-goal { grid-column: 1 / -1; grid-row: 2; text-align: center; font-size: .78rem; }
+  .arena { padding-top: .5rem; gap: .3rem; }
+  .stage { height: clamp(84px, 14vh, 124px); }
+  .flash-face { padding: 1.2rem 1.1rem; min-height: clamp(220px, 40vh, 340px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

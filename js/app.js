@@ -5,6 +5,9 @@ import { readPdf } from './pdf.js';
 import * as store from './store.js';
 import { sfx } from './sfx.js';
 import { fx } from './fx.js';
+import { THEMES, theme } from './themes.js';
+import { music } from './music.js';
+import { createArena } from './battle.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,6 +19,15 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const app = $('#app');
 const bg = initBackground($('#bg'));
 let quizzes = store.load();
+
+/** Everything outside the stylesheet that follows the theme: background scene, song, particle colours. */
+function applyTheme() {
+  bg.setScene(theme.data.scene);
+  music.setTheme(theme.id);
+  fx.setColors([theme.color('--ion'), theme.color('--volt'), theme.color('--ok'), theme.color('--text')]);
+  $('meta[name="theme-color"]')?.setAttribute('content', theme.color('--void'));
+}
+applyTheme();
 
 const find = id => quizzes.find(q => q.id === id);
 const persist = () => {
@@ -92,7 +104,9 @@ function route() {
 
   const [, view, arg] = location.hash.split('/');
   if (view === 'edit') viewEdit(arg);
-  else if (view === 'play') viewPlay(arg);
+  else if (view === 'play') viewPlay(arg, 'quiz');
+  else if (view === 'battle') viewPlay(arg, 'battle');
+  else if (view === 'cards') viewCards(arg);
   else if (view === 'shared') viewShared(arg);
   else viewHome();
 }
@@ -118,22 +132,34 @@ let freshId = null;
 
 function cardHTML(q) {
   const n = q.questions.length;
+  // themes with a battle lead with it; the plain quiz stays one button away
+  const plays = theme.data.battle
+    ? '<button class="btn" data-act="battle">Battle</button><button class="btn ghost" data-act="play">Quiz</button>'
+    : '<button class="btn" data-act="play">Play</button>';
   return `
     <li class="card cut tilt${q.id === freshId ? ' fresh' : ''}" data-id="${q.id}">
       <h3>${esc(q.title || 'Untitled quiz')}</h3>
       <p class="meta">${plural(n, 'question')}, ${q.timePerQ ? `${q.timePerQ} seconds each` : 'no timer'}</p>
       <p class="best">${q.best ? `Best score ${fmt(q.best.score)} with ${q.best.pct}% correct` : 'Not played yet'}</p>
       <div class="row">
-        <button class="btn" data-act="play">Play</button>
-        <button class="btn ghost" data-act="edit">Edit</button>
+        ${plays}
+        <button class="btn ghost" data-act="cards">Flashcards</button>
       </div>
       <div class="row minor">
+        <button class="link" data-act="edit">Edit</button>
         <button class="link" data-act="share">Copy share link</button>
         <button class="link" data-act="export">Export CSV</button>
         <button class="link danger" data-act="delete">Delete</button>
       </div>
     </li>`;
 }
+
+const worldHTML = ([id, t]) => `
+  <button class="world" type="button" role="radio" data-theme="${id}" data-act="world" aria-checked="${id === theme.id}">
+    <strong>${t.name}</strong>
+    <span>${t.blurb}</span>
+    ${id === theme.id ? '<em>Selected</em>' : ''}
+  </button>`;
 
 function viewHome() {
   setView('home');
@@ -142,13 +168,17 @@ function viewHome() {
     <section class="hero">
       <div class="hero-copy">
         <h1 class="glitch boot" data-text="Quiz&#10;Reactor"><span>Quiz</span><span>Reactor</span></h1>
-        <p class="lede">Write multiple-choice questions by hand, or import them from a CSV file or a PDF question paper. Then play against the clock and keep your streak going to heat up the reactor.</p>
+        <p class="lede">Write multiple-choice questions by hand, or import them from a CSV file or a PDF question paper. Then play them as a timed quiz, a battle or flashcards.</p>
         <div class="row">
           <button class="btn big" data-act="new">New quiz</button>
           <button class="btn ghost big" data-act="import">Import CSV or PDF</button>
         </div>
       </div>
       <div class="reactor-slot" aria-hidden="true"></div>
+    </section>
+    <section class="worlds">
+      <h2 id="worlds-h">Pick a theme</h2>
+      <div class="world-row" role="radiogroup" aria-labelledby="worlds-h">${Object.entries(THEMES).map(worldHTML).join('')}</div>
     </section>
     <section class="deck">
       <h2>Your quizzes</h2>
@@ -170,7 +200,10 @@ function viewHome() {
   };
   handlers.import = () => { sfx.click(); openImport({ mode: 'new' }); };
   handlers.play = el => { sfx.click(); go('#/play/' + idOf(el)); };
+  handlers.battle = el => { sfx.click(); go('#/battle/' + idOf(el)); };
+  handlers.cards = el => { sfx.click(); go('#/cards/' + idOf(el)); };
   handlers.edit = el => { sfx.click(); go('#/edit/' + idOf(el)); };
+  handlers.world = el => { sfx.click(); theme.set(el.dataset.theme); };
   handlers.export = el => {
     const quiz = find(idOf(el));
     download(fileSlug(quiz.title) + '.csv', toCSV(quiz));
@@ -375,20 +408,19 @@ function viewEdit(id) {
   };
 }
 
-// ---------- play ----------
+// ---------- play: a timed quiz, or a battle in the themes that have one ----------
 
-const RANKS = [
-  [100, 'Root access'],
-  [80, 'System operator'],
-  [60, 'Packet runner'],
-  [40, 'Script kiddie'],
-  [0, 'Signal lost'],
-];
-const PRAISE = ['Correct', 'Access granted', 'Clean hit', 'Nailed it'];
-
-function viewPlay(id) {
+function viewPlay(id, mode) {
   const quiz = find(id);
   if (!quiz) return go('#/');
+  const world = theme.data;
+  const battle = mode === 'battle';
+  if (battle && !world.battle) {
+    // the hacker theme has no battle, so fall back to the plain quiz
+    toast('Battles need the Pirate seas, Cyberpunk city or Jungle tomb theme.');
+    history.replaceState(null, '', '#/play/' + id);
+    return route();
+  }
 
   const ready = quiz.questions.filter(q => !store.questionIssue(q));
   if (!ready.length) {
@@ -405,6 +437,14 @@ function viewPlay(id) {
   if (quiz.shuffleQ) qs = shuffle(qs);
 
   const limit = quiz.timePerQ;
+  // Battle rules: both sides start with 10 health for every question. A right
+  // answer costs the enemy 10, a wrong one (or running out of time) costs you
+  // 10. You win by getting at least half of the questions right.
+  const maxHp = qs.length * 10;
+  const need = Math.ceil(qs.length / 2);
+  const hp = { you: maxHp, foe: maxHp };
+  const arena = battle ? createArena(theme.id, { labels: world.battle, maxHp, need }) : null;
+
   const S = { i: 0, score: 0, shown: 0, streak: 0, bestStreak: 0, correct: 0, log: [], locked: true, raf: 0, qStart: 0, lastTick: 6, t0: 0, done: false };
   const timers = [];
   const later = (fn, ms) => timers.push(setTimeout(fn, ms));
@@ -415,9 +455,11 @@ function viewPlay(id) {
       <div class="hud">
         <a class="link" href="#/">Quit</a>
         <div class="progress" style="--gap:${qs.length > 30 ? 1 : 4}px" role="img" aria-label="Progress">${qs.map(() => '<i></i>').join('')}</div>
-        <div class="score" aria-label="Score"><span class="score-n">0</span></div>
+        ${battle
+          ? `<div class="score" aria-label="Hits landed, ${need} needed to win"><span class="score-n">0</span><small> / ${need}</small></div>`
+          : '<div class="score" aria-label="Score"><span class="score-n">0</span></div>'}
       </div>
-      <div class="reactor-slot"><div class="streak" role="status"></div></div>
+      <div class="${battle ? 'arena-wrap' : 'reactor-slot'}"><div class="streak" role="status"></div></div>
       <div class="timer"${limit ? '' : ' hidden'}><i></i></div>
       <div class="qwrap">
         <p class="qcount"></p>
@@ -432,7 +474,9 @@ function viewPlay(id) {
     streak: $('.streak'), timer: $('.timer'), bar: $('.timer i'), qwrap: $('.qwrap'),
     count: $('.qcount'), text: $('.qtext'), answers: $('.answers'), after: $('.after'),
   };
-  bg.setMode('play', $('.reactor-slot'));
+  if (arena) $('.arena-wrap').prepend(arena.el);
+  bg.setMode('play', battle ? null : $('.reactor-slot'));
+  music.setBattle(battle);
 
   function begin() {
     els.play.classList.remove('waiting');
@@ -482,6 +526,13 @@ function viewPlay(id) {
     S.raf = requestAnimationFrame(tick);
   }
 
+  /** One side fires at the other. The health bar moves when the shot lands. */
+  function strike(by) {
+    hp[by === 'you' ? 'foe' : 'you'] -= 10;
+    const after = { ...hp };
+    arena.attack(by).then(() => arena.setHp(after));
+  }
+
   function answer(j) {
     if (S.locked) return;
     S.locked = true;
@@ -502,19 +553,24 @@ function viewPlay(id) {
       S.streak++;
       S.correct++;
       S.bestStreak = Math.max(S.bestStreak, S.streak);
-      const mult = 1 + 0.25 * Math.min(S.streak - 1, 4);
-      const gain = Math.round((100 + 50 * frac) * mult);
-      S.score += gain;
       const r = buttons[j].getBoundingClientRect();
       fx.burst(r.left + r.width / 2, r.top + r.height / 2);
       bg.pulse();
       sfx.correct(S.streak);
-      const pop = document.createElement('span');
-      pop.className = 'gain';
-      pop.textContent = '+' + gain;
-      els.score.append(pop);
-      later(() => pop.remove(), 1000);
-      rollScore();
+      if (battle) {
+        els.scoreN.textContent = S.correct;
+        strike('you');
+      } else {
+        const mult = 1 + 0.25 * Math.min(S.streak - 1, 4);
+        const gain = Math.round((100 + 50 * frac) * mult);
+        S.score += gain;
+        const pop = document.createElement('span');
+        pop.className = 'gain';
+        pop.textContent = '+' + gain;
+        els.score.append(pop);
+        later(() => pop.remove(), 1000);
+        rollScore();
+      }
     } else {
       S.streak = 0;
       bg.glitch();
@@ -522,13 +578,14 @@ function viewPlay(id) {
       els.play.classList.remove('shake');
       void els.play.offsetWidth;
       els.play.classList.add('shake');
+      if (battle) strike('foe');
     }
 
     bg.setHeat(S.streak / 5);
     els.segs[S.i].className = right ? 'ok' : 'bad';
     if (S.streak >= 2) {
       const mult = 1 + 0.25 * Math.min(S.streak - 1, 4);
-      els.streak.textContent = `${S.streak} in a row, score ×${mult}`;
+      els.streak.textContent = battle ? `${S.streak} hits in a row` : `${S.streak} in a row, score ×${mult}`;
       els.streak.classList.remove('bump');
       void els.streak.offsetWidth;
       els.streak.classList.add('bump');
@@ -537,11 +594,13 @@ function viewPlay(id) {
     S.log.push({ q: q.q, explain: q.explain, right, picked: j >= 0 ? q.opts[j].t : null, answer: q.opts[ci].t });
 
     const last = S.i === qs.length - 1;
-    const verdict = right ? PRAISE[S.i % PRAISE.length] : j < 0 ? 'Time is up' : 'Not quite';
+    const verdict = right ? world.praise[S.i % world.praise.length] : j < 0 ? 'Time is up' : 'Not quite';
+    const blow = battle ? `<p class="blow">${right ? world.battle.hit : world.battle.hurt + ' You lose 10 health.'}</p>` : '';
     els.after.innerHTML = `
       <div class="verdict ${right ? 'ok' : 'bad'}">
         <strong>${verdict}</strong>${right ? '' : `<span>The answer is ${LETTERS[ci]}: ${esc(q.opts[ci].t)}</span>`}
         ${q.explain ? `<p>${esc(q.explain)}</p>` : ''}
+        ${blow}
       </div>
       <button class="btn" data-act="next">${last ? 'See results' : 'Next question'}</button>`;
     const nextBtn = $('button', els.after);
@@ -589,12 +648,61 @@ function viewPlay(id) {
   function finish() {
     S.done = true;
     const secs = Math.round((performance.now() - S.t0) / 1000);
+    const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
     const pct = Math.round(S.correct / qs.length * 100);
-    const rank = RANKS.find(r => pct >= r[0])[1];
+    const links = `<a class="btn ghost" href="#/edit/${quiz.id}">Edit quiz</a><a class="btn ghost" href="#/">All quizzes</a>`;
+    const review = `
+      <h3>Review your answers</h3>
+      <ol class="review">
+        ${S.log.map(l => `
+          <li class="cut ${l.right ? 'ok' : 'bad'}">
+            <p class="rq">${esc(l.q)}</p>
+            ${l.right
+              ? `<p class="yours ok">You answered: ${esc(l.picked)}</p>`
+              : `<p class="yours bad">${l.picked === null ? 'You ran out of time' : 'You answered: ' + esc(l.picked)}</p>
+                 <p class="right">Correct answer: ${esc(l.answer)}</p>`}
+            ${l.explain ? `<p class="ex">${esc(l.explain)}</p>` : ''}
+          </li>`).join('')}
+      </ol>`;
+
+    setView('results');
+
+    if (battle) {
+      const won = S.correct >= need;
+      app.innerHTML = `
+        <div class="results">
+          <div class="arena-slot"></div>
+          <p class="rank${won ? '' : ' lost'}">${won ? world.battle.win : world.battle.lose}</p>
+          <p class="outcome">You needed ${need} correct ${need === 1 ? 'answer' : 'answers'} and got ${S.correct}.${won ? '' : ' Restart the battle to try again.'}</p>
+          <dl class="stats">
+            <div><dt>Correct</dt><dd>${S.correct} of ${qs.length}</dd></div>
+            <div><dt>Your health</dt><dd>${hp.you} of ${maxHp}</dd></div>
+            <div><dt>Enemy health</dt><dd>${hp.foe} of ${maxHp}</dd></div>
+            <div><dt>Time</dt><dd>${time}</dd></div>
+          </dl>
+          <div class="row center">
+            <button class="btn big" data-act="again">${won ? 'Battle again' : 'Restart battle'}</button>
+            ${links}
+          </div>
+          ${review}
+        </div>`;
+      // carry the arena over, so the last shot can land and the loser can leave the scene
+      $('.arena-slot').replaceWith(arena.el);
+      arena.setHp(hp);
+      arena.finish(won ? 'you' : 'foe');
+      bg.setMode('results');
+      bg.setHeat(pct / 100);
+      sfx.finish(won);
+      if (won) bg.pulse();
+      if (pct === 100) fx.rain();
+      $('[data-act="again"]').focus({ preventScroll: true });
+      return;
+    }
+
+    const rank = world.ranks.find(r => pct >= r[0])[1];
     const isBest = !quiz.best || S.score > quiz.best.score;
     if (isBest) { quiz.best = { score: S.score, pct }; persist(); }
 
-    setView('results');
     app.innerHTML = `
       <div class="results">
         <div class="reactor-slot" aria-hidden="true"></div>
@@ -604,25 +712,13 @@ function viewPlay(id) {
         <dl class="stats">
           <div><dt>Correct</dt><dd>${S.correct} of ${qs.length}</dd></div>
           <div><dt>Best streak</dt><dd>${S.bestStreak}</dd></div>
-          <div><dt>Time</dt><dd>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</dd></div>
+          <div><dt>Time</dt><dd>${time}</dd></div>
         </dl>
         <div class="row center">
           <button class="btn big" data-act="again">Play again</button>
-          <a class="btn ghost" href="#/edit/${quiz.id}">Edit quiz</a>
-          <a class="btn ghost" href="#/">All quizzes</a>
+          ${links}
         </div>
-        <h3>Review your answers</h3>
-        <ol class="review">
-          ${S.log.map(l => `
-            <li class="cut ${l.right ? 'ok' : 'bad'}">
-              <p class="rq">${esc(l.q)}</p>
-              ${l.right
-                ? `<p class="yours ok">You answered: ${esc(l.picked)}</p>`
-                : `<p class="yours bad">${l.picked === null ? 'You ran out of time' : 'You answered: ' + esc(l.picked)}</p>
-                   <p class="right">Correct answer: ${esc(l.answer)}</p>`}
-              ${l.explain ? `<p class="ex">${esc(l.explain)}</p>` : ''}
-            </li>`).join('')}
-        </ol>
+        ${review}
       </div>`;
 
     bg.setMode('results', $('.reactor-slot'));
@@ -648,7 +744,159 @@ function viewPlay(id) {
     cancelAnimationFrame(rollRaf);
     timers.forEach(clearTimeout);
     removeEventListener('keydown', onKey);
+    arena?.destroy();
+    music.setBattle(false);
   };
+}
+
+// ---------- flashcards ----------
+
+function viewCards(id) {
+  const quiz = find(id);
+  if (!quiz) return go('#/');
+  const ready = quiz.questions.filter(q => !store.questionIssue(q));
+  if (!ready.length) {
+    toast('This quiz has no finished questions yet. Complete one to study it.');
+    return go('#/edit/' + id);
+  }
+
+  let deck = ready.map(q => ({
+    q: q.q.trim(),
+    options: q.options.map(o => o.trim()).filter(Boolean),
+    answer: q.options[q.answer].trim(),
+    explain: q.explain.trim(),
+  }));
+  if (quiz.shuffleQ) deck = shuffle(deck);
+
+  // queue: cards still to learn, in order. A card marked "still learning" goes to the back.
+  const S = { queue: deck.map((_, i) => i), known: new Set(), again: new Set(), flipped: false, done: false, t0: performance.now() };
+
+  setView('cards');
+  bg.setMode('cards');
+  app.innerHTML = `
+    <div class="study">
+      <div class="hud">
+        <a class="link" href="#/">Quit</a>
+        <div class="progress" style="--gap:${deck.length > 30 ? 1 : 4}px" role="img" aria-label="Progress">${deck.map(() => '<i></i>').join('')}</div>
+        <div class="tally" role="status"></div>
+      </div>
+      <div class="flash" role="button" tabindex="0" data-act="flip" aria-label="Flashcard. Select it to turn it over.">
+        <div class="flash-inner">
+          <div class="flash-face front cut"></div>
+          <div class="flash-face reverse cut" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div class="row center study-actions"></div>
+      <p class="small study-keys">Space turns the card over. Then press 1 for still learning or 2 for got it.</p>
+    </div>`;
+
+  const els = {
+    flash: $('.flash'), front: $('.flash-face.front'), back: $('.flash-face.reverse'),
+    actions: $('.study-actions'), tally: $('.tally'), segs: [...$('.progress').children],
+  };
+
+  function paintActions() {
+    els.actions.innerHTML = S.flipped
+      ? '<button class="btn ghost" data-act="learning">Still learning</button><button class="btn" data-act="known">Got it</button>'
+      : '<button class="btn" data-act="flip">Show answer</button>';
+  }
+
+  function setFlipped(on) {
+    S.flipped = on;
+    els.flash.classList.toggle('flipped', on);
+    els.front.setAttribute('aria-hidden', String(on));
+    els.back.setAttribute('aria-hidden', String(!on));
+    paintActions();
+  }
+
+  function show() {
+    const i = S.queue[0];
+    const card = deck[i];
+    // turn back to the front without animating, so the next answer never shows on the way round
+    els.flash.classList.add('snap');
+    els.flash.classList.remove('in');
+    setFlipped(false);
+    els.front.innerHTML = `
+      <p class="qcount">${plural(S.queue.length, 'card')} left</p>
+      <h2 class="qtext">${esc(card.q)}</h2>
+      <ul class="flash-opts">${card.options.map(o => `<li>${esc(o)}</li>`).join('')}</ul>`;
+    els.back.innerHTML = `
+      <p class="qcount">Answer</p>
+      <h2 class="qtext">${esc(card.answer)}</h2>
+      ${card.explain ? `<p class="ex">${esc(card.explain)}</p>` : ''}`;
+    void els.flash.offsetWidth;
+    els.flash.classList.remove('snap');
+    els.flash.classList.add('in');
+    els.segs.forEach((seg, k) => { seg.className = S.known.has(k) ? 'ok' : k === i ? 'now' : ''; });
+    els.tally.textContent = `${S.known.size} of ${deck.length} known`;
+  }
+
+  function flip() {
+    if (S.done) return;
+    sfx.flip();
+    setFlipped(!S.flipped);
+    els.flash.focus({ preventScroll: true });
+  }
+
+  function grade(knew) {
+    if (!S.flipped || S.done) return;
+    const i = S.queue.shift();
+    if (knew) {
+      S.known.add(i);
+      sfx.correct(1);
+    } else {
+      S.again.add(i);
+      S.queue.push(i);
+      sfx.beep();
+    }
+    if (!S.queue.length) return finish();
+    show();
+    els.flash.focus({ preventScroll: true });
+  }
+
+  function finish() {
+    S.done = true;
+    const secs = Math.round((performance.now() - S.t0) / 1000);
+    const first = deck.length - S.again.size;
+    setView('results');
+    app.innerHTML = `
+      <div class="results">
+        <div class="reactor-slot" aria-hidden="true"></div>
+        <p class="rank">${deck.length === 1 ? 'Card known' : `All ${deck.length} cards known`}</p>
+        <dl class="stats">
+          <div><dt>Known first time</dt><dd>${first}</dd></div>
+          <div><dt>Needed another look</dt><dd>${S.again.size}</dd></div>
+          <div><dt>Time</dt><dd>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}</dd></div>
+        </dl>
+        <div class="row center">
+          <button class="btn big" data-act="restart">Study again</button>
+          <a class="btn ghost" href="#/play/${quiz.id}">Play the quiz</a>
+          <a class="btn ghost" href="#/">All quizzes</a>
+        </div>
+      </div>`;
+    bg.setMode('results', $('.reactor-slot'));
+    bg.setHeat(first / deck.length);
+    bg.pulse();
+    sfx.finish(true);
+    $('[data-act="restart"]').focus({ preventScroll: true });
+  }
+
+  handlers.flip = flip;
+  handlers.learning = () => grade(false);
+  handlers.known = () => grade(true);
+  handlers.restart = () => { sfx.click(); route(); };
+
+  const onKey = e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || S.done) return;
+    const onControl = e.target.closest?.('button, a, select');
+    if ((e.key === ' ' || e.key === 'Enter') && !onControl) { e.preventDefault(); flip(); }
+    else if (e.key === '1' || e.key === 'ArrowLeft') { e.preventDefault(); grade(false); }
+    else if (e.key === '2' || e.key === 'ArrowRight') { e.preventDefault(); grade(true); }
+  };
+  addEventListener('keydown', onKey);
+  leaveView = () => removeEventListener('keydown', onKey);
+
+  show();
 }
 
 // ---------- shared link ----------
@@ -891,7 +1139,24 @@ addEventListener('drop', e => {
   openImport(editing ? { mode: 'append', quiz: editing } : { mode: 'new' }, file);
 });
 
-// ---------- sound toggle, card tilt ----------
+// ---------- theme picker, music and sound toggles, card tilt ----------
+
+const themeSel = $('#theme');
+themeSel.innerHTML = Object.entries(THEMES).map(([id, t]) => `<option value="${id}">${t.name}</option>`).join('');
+themeSel.value = theme.id;
+themeSel.addEventListener('change', () => theme.set(themeSel.value));
+theme.onChange(id => {
+  themeSel.value = id;
+  applyTheme();
+  // the quiz list offers different buttons per theme, and the tiles show which one is on
+  if (document.body.dataset.view === 'home') {
+    const y = scrollY;
+    const picked = document.activeElement?.dataset?.theme;
+    viewHome();
+    scrollTo(0, y);
+    if (picked) $(`.world[data-theme="${picked}"]`)?.focus({ preventScroll: true });
+  }
+});
 
 const soundBtn = $('#sound');
 const paintSound = () => {
@@ -900,6 +1165,16 @@ const paintSound = () => {
 };
 soundBtn.addEventListener('click', () => { sfx.toggle(); paintSound(); });
 paintSound();
+
+const musicBtn = $('#music');
+const paintMusic = () => {
+  musicBtn.textContent = music.enabled ? 'Music on' : 'Music off';
+  musicBtn.setAttribute('aria-pressed', String(music.enabled));
+};
+musicBtn.addEventListener('click', () => { music.toggle(); paintMusic(); });
+paintMusic();
+// browsers only allow sound after the first click or key press
+for (const type of ['pointerdown', 'keydown']) addEventListener(type, () => music.unlock(), { once: true });
 
 let tilted = null;
 addEventListener('pointermove', e => {
