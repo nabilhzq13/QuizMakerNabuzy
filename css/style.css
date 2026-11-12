@@ -312,6 +312,8 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .qcard .link { justify-self: start; }
 .issue { color: var(--volt); font-size: .9rem; }
 .issue:empty { display: none; }
+/* a question that can't be played yet gets a lime edge, so it is easy to spot in a long list */
+.qcard:has(.issue:not(:empty)) { --edge: #7f9a22; }
 
 .editor-foot {
   position: sticky;
@@ -494,7 +496,7 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .modal-body { --c: 20px; --edge: var(--ion); padding: 1.6rem; display: grid; gap: .85rem; max-height: 92dvh; overflow-y: auto; }
 .modal h2 { font: 700 1.5rem var(--display); }
 .format { margin: 0; padding: .6rem .8rem; background: #020804; border-left: 3px solid var(--ion); font: .88rem var(--mono); white-space: pre-wrap; color: var(--ion); }
-#csv-text { font: .88rem/1.5 var(--mono); max-height: 11rem; }
+#imp-text { font: .88rem/1.5 var(--mono); max-height: 11rem; }
 
 .drop {
   display: grid;
@@ -515,11 +517,21 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .report { padding: .7rem .9rem; background: #020804; border-left: 3px solid var(--ok); font-size: .93rem; }
 .report.warn { border-left-color: var(--volt); }
 .report.fail { border-left-color: var(--pulse); }
+.report.busy { border-left-color: var(--ion); color: var(--ion); font-family: var(--mono); }
+.report.busy::after { content: "_"; animation: cursor 1s steps(1) infinite; }
+.report p { margin-top: .35rem; color: var(--muted); }
+
+.help { border: 1px solid var(--line); background: #020804; }
+.help summary { padding: .5rem .8rem; cursor: pointer; font: 500 .92rem var(--display); color: var(--ion); }
+.help summary:hover { color: var(--volt); }
+.help[open] { padding-bottom: .7rem; }
+.help > :not(summary) { margin: .45rem .8rem 0; }
+.help .format { border-left: 0; padding: 0; }
 .report ul { margin: .35rem 0 0; padding-left: 1.1rem; color: var(--muted); }
 .modal-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: .3rem; }
 
 body.dragging::after {
-  content: "Drop the CSV file to import it";
+  content: "Drop the CSV or PDF file to import it";
   position: fixed;
   inset: 12px;
   z-index: 40;

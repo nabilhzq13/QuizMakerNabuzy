@@ -1,5 +1,7 @@
 import { initBackground } from './shader.js';
 import { parseCSV, rowsToQuestions, toCSV, SAMPLE_CSV } from './csv.js';
+import { parsePaper } from './paper.js';
+import { readPdf } from './pdf.js';
 import * as store from './store.js';
 import { sfx } from './sfx.js';
 import { fx } from './fx.js';
@@ -140,10 +142,10 @@ function viewHome() {
     <section class="hero">
       <div class="hero-copy">
         <h1 class="glitch boot" data-text="Quiz&#10;Reactor"><span>Quiz</span><span>Reactor</span></h1>
-        <p class="lede">Write multiple-choice questions by hand or drop in a CSV file. Then play against the clock and keep your streak going to heat up the reactor.</p>
+        <p class="lede">Write multiple-choice questions by hand, or import them from a CSV file or a PDF question paper. Then play against the clock and keep your streak going to heat up the reactor.</p>
         <div class="row">
           <button class="btn big" data-act="new">New quiz</button>
-          <button class="btn ghost big" data-act="import">Import CSV</button>
+          <button class="btn ghost big" data-act="import">Import CSV or PDF</button>
         </div>
       </div>
       <div class="reactor-slot" aria-hidden="true"></div>
@@ -152,7 +154,7 @@ function viewHome() {
       <h2>Your quizzes</h2>
       ${list.length
         ? `<ul class="cards">${list.map(cardHTML).join('')}</ul>`
-        : '<p class="empty">No quizzes yet. Start a new quiz or import a CSV file.</p>'}
+        : '<p class="empty">No quizzes yet. Start a new quiz or import a CSV or PDF file.</p>'}
     </section>`;
   freshId = null;
   bg.setMode('home', $('.reactor-slot'));
@@ -166,7 +168,7 @@ function viewHome() {
     persist();
     go('#/edit/' + quiz.id);
   };
-  handlers.import = () => { sfx.click(); openCsv({ mode: 'new' }); };
+  handlers.import = () => { sfx.click(); openImport({ mode: 'new' }); };
   handlers.play = el => { sfx.click(); go('#/play/' + idOf(el)); };
   handlers.edit = el => { sfx.click(); go('#/edit/' + idOf(el)); };
   handlers.export = el => {
@@ -223,7 +225,8 @@ function viewEdit(id) {
       <ol class="qlist"></ol>
       <div class="editor-foot cut">
         <button class="btn ghost" data-act="add-q">Add question</button>
-        <button class="btn ghost" data-act="add-csv">Add from CSV</button>
+        <button class="btn ghost" data-act="add-file">Add from file</button>
+        <button class="link" data-act="next-issue" hidden></button>
         <span class="saved" role="status"></span>
         <button class="btn" data-act="play-this">Play quiz</button>
       </div>
@@ -261,7 +264,15 @@ function viewEdit(id) {
       <p class="issue">${esc(store.questionIssue(q))}</p>
     </li>`;
 
-  const render = () => { listEl.innerHTML = quiz.questions.map(cardHTML).join(''); };
+  // how many questions still can't be played, with a shortcut to the first one
+  const issuesBtn = $('[data-act="next-issue"]');
+  const paintIssues = () => {
+    const n = quiz.questions.filter(store.questionIssue).length;
+    issuesBtn.hidden = n === 0;
+    issuesBtn.textContent = n === 1 ? '1 question is not finished' : `${n} questions are not finished`;
+  };
+
+  const render = () => { listEl.innerHTML = quiz.questions.map(cardHTML).join(''); paintIssues(); };
   render();
 
   let saveTimer = 0;
@@ -294,6 +305,7 @@ function viewEdit(id) {
       else if (t.dataset.f === 'opt') q.options[Number(t.closest('.opt').dataset.j)] = t.value;
       else if (t.dataset.f === 'answer') q.answer = Number(t.value);
       $('.issue', card).textContent = store.questionIssue(q);
+      paintIssues();
     } else return;
     touch();
   };
@@ -306,7 +318,17 @@ function viewEdit(id) {
     render(); touch();
     focusCard(quiz.questions.length - 1);
   };
-  handlers['add-csv'] = () => { sfx.click(); flush(); openCsv({ mode: 'append', quiz }); };
+  handlers['add-file'] = () => { sfx.click(); flush(); openImport({ mode: 'append', quiz }); };
+  handlers['next-issue'] = () => {
+    const i = quiz.questions.findIndex(store.questionIssue);
+    if (i < 0) return;
+    const q = quiz.questions[i];
+    // land on the field that needs filling in: the text, an answer, or the answer letters
+    const sel = !q.q.trim() ? 'textarea'
+      : q.options.filter(o => o.trim()).length < 2 ? '.opt input[type="text"]'
+      : '.pick input';
+    focusCard(i, sel);
+  };
   handlers['play-this'] = () => { sfx.click(); flush(); go('#/play/' + quiz.id); };
   handlers['q-up'] = el => move(indexOf(el), -1);
   handlers['q-down'] = el => move(indexOf(el), 1);
@@ -333,7 +355,7 @@ function viewEdit(id) {
     const j = Number(el.closest('.opt').dataset.j);
     const q = quiz.questions[i];
     q.options.splice(j, 1);
-    if (q.answer === j) q.answer = 0;
+    if (q.answer === j) q.answer = -1; // the correct answer was removed, so it has to be picked again
     else if (q.answer > j) q.answer--;
     render(); touch();
   };
@@ -655,114 +677,203 @@ async function viewShared(code) {
   }
 }
 
-// ---------- CSV import dialog ----------
+// ---------- import dialog (CSV file, PDF question paper or pasted text) ----------
 
-const csv = {
-  dlg: $('#csv'), drop: $('#csv-drop'), file: $('#csv-file'), text: $('#csv-text'),
-  report: $('#csv-report'), name: $('#csv-name'), nameField: $('#csv-title-field'),
-  ok: $('#csv-ok'), title: $('#csv-title'),
-  ctx: null, found: [],
+const imp = {
+  dlg: $('#imp'), drop: $('#imp-drop'), file: $('#imp-file'), text: $('#imp-text'), textLabel: $('#imp-text-label'),
+  report: $('#imp-report'), name: $('#imp-name'), nameField: $('#imp-title-field'),
+  ok: $('#imp-ok'), title: $('#imp-title'),
+  ctx: null, found: [], unanswered: 0,
+  pdf: null, // { pages, total, ocrPages } while the text box holds text read from a PDF
+  job: 0,    // goes up whenever a new file is read or the dialog closes, so stale reads are dropped
 };
 
-function openCsv(ctx, file) {
-  csv.ctx = ctx;
-  csv.found = [];
-  csv.text.value = '';
-  csv.file.value = '';
-  csv.name.value = '';
-  csv.report.textContent = '';
-  csv.report.className = 'report';
-  const adding = ctx.mode === 'append';
-  csv.title.textContent = adding ? 'Add questions from CSV' : 'Import questions from CSV';
-  csv.nameField.hidden = adding;
-  csv.ok.disabled = true;
-  csv.ok.textContent = adding ? 'Add questions' : 'Create quiz';
-  if (!csv.dlg.open) csv.dlg.showModal();
-  if (file) readCsvFile(file);
+const PASTE_LABEL = 'Or paste CSV text, or the questions as plain text';
+const PDF_ERRORS = {
+  library: 'Could not load the PDF reader. Check your internet connection and try again.',
+  ocr: 'This PDF is a scan, and the OCR engine could not be loaded. Check your internet connection and try again.',
+  locked: 'This PDF is password protected. Save a copy without the password and import that.',
+  broken: 'This file could not be read as a PDF.',
+};
+
+const isPdf = file => file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+const titleFrom = name => name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim().slice(0, 120);
+const listPages = p => p.length === 1 ? `Page ${p[0]} was a scan` : `Pages ${p.slice(0, -1).join(', ')} and ${p[p.length - 1]} were scans`;
+
+function setReport(kind, html) {
+  imp.report.className = 'report' + (kind ? ' ' + kind : '');
+  imp.report.innerHTML = html;
 }
 
-async function readCsvFile(file) {
-  if (!file) return;
-  if (file.size > 2 * 1024 * 1024) {
-    csv.report.className = 'report fail';
-    csv.report.textContent = 'That file is larger than 2 MB. Split it into smaller files.';
-    return;
-  }
-  csv.text.value = await file.text();
-  if (!csv.name.value) csv.name.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim().slice(0, 120);
-  analyzeCsv();
-}
-
-function analyzeCsv() {
-  const adding = csv.ctx?.mode === 'append';
-  const src = csv.text.value;
-  if (!src.trim()) {
-    csv.found = [];
-    csv.report.textContent = '';
-    csv.report.className = 'report';
-    csv.ok.disabled = true;
-    csv.ok.textContent = adding ? 'Add questions' : 'Create quiz';
-    return;
-  }
-  const { questions, errors } = rowsToQuestions(parseCSV(src));
-  csv.found = questions;
-  const n = questions.length;
-  csv.report.className = 'report' + (n === 0 ? ' fail' : errors.length ? ' warn' : '');
-  const shown = errors.slice(0, 5).map(e => `<li>Row ${e.row}: ${esc(e.msg)}</li>`).join('');
-  const more = errors.length > 5 ? `<li>and ${errors.length - 5} more</li>` : '';
-  csv.report.innerHTML =
-    (n ? `<strong>${plural(n, 'question')} ready to import.</strong>` : '<strong>No questions found.</strong> Check that the columns match the order above.') +
-    (errors.length ? ` ${plural(errors.length, 'row')} skipped:<ul>${shown}${more}</ul>` : '');
-  csv.ok.disabled = n === 0;
-  csv.ok.textContent = n
+function paintOk() {
+  const adding = imp.ctx?.mode === 'append';
+  const n = imp.found.length;
+  imp.ok.disabled = n === 0;
+  imp.ok.textContent = n
     ? (adding ? `Add ${plural(n, 'question')}` : `Create quiz with ${plural(n, 'question')}`)
     : (adding ? 'Add questions' : 'Create quiz');
 }
 
-csv.file.addEventListener('change', () => readCsvFile(csv.file.files[0]));
-csv.text.addEventListener('input', analyzeCsv);
-$('#csv-cancel').addEventListener('click', () => csv.dlg.close());
-$('#csv-template').addEventListener('click', () => download('quiz-template.csv', SAMPLE_CSV));
-csv.dlg.addEventListener('click', e => { if (e.target === csv.dlg) csv.dlg.close(); });
+function openImport(ctx, file) {
+  imp.job++;
+  imp.ctx = ctx;
+  imp.found = [];
+  imp.unanswered = 0;
+  imp.pdf = null;
+  imp.text.value = '';
+  imp.file.value = '';
+  imp.name.value = '';
+  imp.textLabel.textContent = PASTE_LABEL;
+  setReport('', '');
+  const adding = ctx.mode === 'append';
+  imp.title.textContent = adding ? 'Add questions from a file' : 'Import questions';
+  imp.nameField.hidden = adding;
+  paintOk();
+  if (!imp.dlg.open) imp.dlg.showModal();
+  if (file) readImportFile(file);
+}
 
-csv.ok.addEventListener('click', () => {
-  const n = csv.found.length;
+async function readImportFile(file) {
+  if (!file) return;
+  const job = ++imp.job;
+  imp.pdf = null;
+  imp.textLabel.textContent = PASTE_LABEL;
+  if (isPdf(file)) return readPdfFile(file, job);
+
+  if (file.size > 2 * 1024 * 1024) return setReport('fail', 'That file is larger than 2 MB. Split it into smaller files.');
+  const text = await file.text();
+  if (job !== imp.job) return;
+  imp.text.value = text;
+  if (!imp.name.value) imp.name.value = titleFrom(file.name);
+  analyze();
+}
+
+async function readPdfFile(file, job) {
+  if (file.size > 40 * 1024 * 1024) return setReport('fail', 'That PDF is larger than 40 MB. Split it into smaller files.');
+  imp.found = [];
+  imp.text.value = '';
+  paintOk();
+  setReport('busy', 'Opening the PDF');
+  try {
+    const res = await readPdf(file, {
+      isCancelled: () => job !== imp.job,
+      onProgress: p => {
+        if (job !== imp.job) return;
+        setReport('busy', p.ocr
+          ? `Page ${p.page} of ${p.pages} is a scan. Reading it with OCR, which can take a minute.`
+          : `Reading page ${p.page} of ${p.pages}`);
+      },
+    });
+    if (!res || job !== imp.job) return;
+    imp.pdf = { pages: res.pages, total: res.total, ocrPages: res.ocrPages };
+    imp.text.value = res.text;
+    imp.textLabel.textContent = 'Text read from the PDF. Fix any mistakes here and it is checked again.';
+    if (!imp.name.value) imp.name.value = titleFrom(file.name);
+    analyze();
+  } catch (err) {
+    if (job !== imp.job) return;
+    console.error(err);
+    setReport('fail', PDF_ERRORS[err?.code] || PDF_ERRORS.broken);
+  }
+}
+
+function analyze() {
+  const src = imp.text.value;
+  if (!src.trim()) {
+    const wasPdf = imp.pdf;
+    imp.found = [];
+    imp.unanswered = 0;
+    imp.pdf = null;
+    imp.textLabel.textContent = PASTE_LABEL;
+    setReport(wasPdf ? 'fail' : '', wasPdf ? '<strong>No text found in this PDF.</strong> The pages may be blank or too faint to read.' : '');
+    paintOk();
+    return;
+  }
+
+  // pasted text can be CSV or a question paper: use whichever reading finds more questions
+  const asCsv = rowsToQuestions(parseCSV(src));
+  const asPaper = parsePaper(src);
+  const paper = imp.pdf ? true : asPaper.questions.length > asCsv.questions.length;
+  const more = (list, of) => list.length > 5 ? `<li>and ${list.length - 5} more ${of}</li>` : '';
+
+  if (!paper) {
+    const { questions, errors } = asCsv;
+    const n = questions.length;
+    imp.found = questions;
+    imp.unanswered = 0;
+    setReport(n === 0 ? 'fail' : errors.length ? 'warn' : '',
+      (n ? `<strong>${plural(n, 'question')} ready to import.</strong>`
+         : '<strong>No questions found.</strong> For CSV, check the column order. For plain text, number the questions and label the options A, B, C.') +
+      (errors.length ? ` ${plural(errors.length, 'row')} skipped:<ul>${errors.slice(0, 5).map(e => `<li>Row ${e.row}: ${esc(e.msg)}</li>`).join('')}${more(errors, 'rows')}</ul>` : ''));
+  } else {
+    const { questions, notes, unanswered } = asPaper;
+    const n = questions.length;
+    imp.found = questions;
+    imp.unanswered = unanswered;
+    const ocr = imp.pdf?.ocrPages || [];
+    let html = n
+      ? `<strong>${plural(n, 'question')} found.</strong>`
+      : '<strong>No questions found.</strong> The text needs numbered questions with options labelled A, B, C.' + (imp.pdf ? ' You can fix the text above and it is checked again.' : '');
+    if (n && unanswered) {
+      html += (unanswered === n ? ' No answers were found in the text.' : ` ${unanswered} of them ${unanswered === 1 ? 'has' : 'have'} no answer in the text.`) +
+        ' You mark the correct answers in the editor after importing.';
+    }
+    if (notes.length) html += ` ${plural(notes.length, 'question')} skipped:<ul>${notes.slice(0, 5).map(e => `<li>Question ${e.n}: ${esc(e.msg)}</li>`).join('')}${more(notes, 'questions')}</ul>`;
+    if (ocr.length) html += `<p>${listPages(ocr)} read with OCR, which can misread letters. Check the text above.</p>`;
+    if (imp.pdf && imp.pdf.total > imp.pdf.pages) html += `<p>Only the first ${imp.pdf.pages} of ${imp.pdf.total} pages were read.</p>`;
+    setReport(n === 0 ? 'fail' : notes.length || unanswered || ocr.length ? 'warn' : '', html);
+  }
+  paintOk();
+}
+
+imp.file.addEventListener('change', () => readImportFile(imp.file.files[0]));
+imp.text.addEventListener('input', analyze);
+$('#imp-cancel').addEventListener('click', () => imp.dlg.close());
+$('#imp-template').addEventListener('click', () => download('quiz-template.csv', SAMPLE_CSV));
+imp.dlg.addEventListener('click', e => { if (e.target === imp.dlg) imp.dlg.close(); });
+imp.dlg.addEventListener('close', () => { imp.job++; });
+
+imp.ok.addEventListener('click', () => {
+  const n = imp.found.length;
   if (!n) return;
+  const todo = imp.unanswered;
+  const markNote = todo ? ` Mark the correct answer for ${todo === n ? 'each one' : todo + ' of them'}.` : '';
   sfx.correct(2);
-  if (csv.ctx.mode === 'append') {
-    const quiz = csv.ctx.quiz;
+  if (imp.ctx.mode === 'append') {
+    const quiz = imp.ctx.quiz;
     // replace a lone untouched blank question instead of leaving it on top
     if (quiz.questions.length === 1 && !quiz.questions[0].q.trim() && quiz.questions[0].options.every(o => !o.trim())) quiz.questions = [];
-    quiz.questions.push(...csv.found.slice(0, 500 - quiz.questions.length));
+    quiz.questions.push(...imp.found.slice(0, 500 - quiz.questions.length));
     quiz.updated = Date.now();
     persist();
-    csv.dlg.close();
-    toast(`Added ${plural(n, 'question')}`);
+    imp.dlg.close();
+    toast(`Added ${plural(n, 'question')}.${markNote}`);
     route();
   } else {
-    const quiz = store.normalizeQuiz({ title: csv.name.value.trim() || 'Imported quiz', questions: csv.found });
+    const quiz = store.normalizeQuiz({ title: imp.name.value.trim() || 'Imported quiz', questions: imp.found });
     quizzes.push(quiz);
     persist();
     freshId = quiz.id;
-    csv.dlg.close();
-    toast(`Created a quiz with ${plural(n, 'question')}`);
-    go('#/');
+    imp.dlg.close();
+    toast(`Created a quiz with ${plural(n, 'question')}.${markNote}`);
+    // answers still to mark: open the editor, otherwise back to the list
+    go(todo ? '#/edit/' + quiz.id : '#/');
   }
 });
 
-// drag a CSV file anywhere onto the page
+// drag a CSV or PDF file anywhere onto the page
 let dragDepth = 0;
 const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
 addEventListener('dragenter', e => {
   if (!hasFiles(e)) return;
   dragDepth++;
-  if (csv.dlg.open) csv.drop.classList.add('over');
+  if (imp.dlg.open) imp.drop.classList.add('over');
   else if (document.body.dataset.view !== 'play') document.body.classList.add('dragging');
 });
 addEventListener('dragleave', e => {
   if (!hasFiles(e)) return;
   dragDepth = Math.max(0, dragDepth - 1);
-  if (!dragDepth) { document.body.classList.remove('dragging'); csv.drop.classList.remove('over'); }
+  if (!dragDepth) { document.body.classList.remove('dragging'); imp.drop.classList.remove('over'); }
 });
 addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
 addEventListener('drop', e => {
@@ -770,14 +881,14 @@ addEventListener('drop', e => {
   e.preventDefault();
   dragDepth = 0;
   document.body.classList.remove('dragging');
-  csv.drop.classList.remove('over');
+  imp.drop.classList.remove('over');
   const file = e.dataTransfer.files[0];
   if (!file) return;
-  if (csv.dlg.open) return readCsvFile(file);
+  if (imp.dlg.open) return readImportFile(file);
   const view = document.body.dataset.view;
   if (view === 'play') return;
   const editing = view === 'edit' && find(location.hash.split('/')[2]);
-  openCsv(editing ? { mode: 'append', quiz: editing } : { mode: 'new' }, file);
+  openImport(editing ? { mode: 'append', quiz: editing } : { mode: 'new' }, file);
 });
 
 // ---------- sound toggle, card tilt ----------

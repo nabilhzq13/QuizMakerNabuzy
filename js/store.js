@@ -19,7 +19,8 @@ export function normalizeQuiz(raw) {
   const questions = (Array.isArray(raw.questions) ? raw.questions : []).slice(0, 500).map(q => {
     const options = (Array.isArray(q?.options) ? q.options : []).slice(0, 6).map(o => str(o, 200));
     while (options.length < 2) options.push('');
-    const answer = Number.isInteger(q?.answer) && q.answer >= 0 && q.answer < options.length ? q.answer : 0;
+    // -1 means the correct answer has not been marked yet (a PDF with no answers in it)
+    const answer = Number.isInteger(q?.answer) && q.answer >= -1 && q.answer < options.length ? q.answer : 0;
     return { q: str(q?.q, 500), options, answer, explain: str(q?.explain, 500) };
   });
   const best = raw.best && Number.isFinite(raw.best.score) && Number.isFinite(raw.best.pct)
@@ -41,6 +42,7 @@ export function normalizeQuiz(raw) {
 export function questionIssue(q) {
   if (!q.q.trim()) return 'Add the question text.';
   if (q.options.filter(o => o.trim()).length < 2) return 'Add at least two answers.';
+  if (q.answer < 0) return 'Select the letter of the correct answer.';
   if (!(q.options[q.answer] || '').trim()) return 'The answer marked as correct is empty.';
   return '';
 }
