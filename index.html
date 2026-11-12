@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quiz Reactor</title>
+  <meta name="description" content="Make multiple-choice quizzes by hand or from a CSV file, then play them against the clock.">
+  <meta name="theme-color" content="#07041a">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307041a'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%232ff3ff' stroke-width='2.5'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23f4ff3a'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500;600&family=Oxanium:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-view="home">
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <canvas id="fx" aria-hidden="true"></canvas>
+
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><path d="M16 3 29 16 16 29 3 16Z" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M16 11 21 16 16 21 11 16Z" fill="var(--volt)"/></svg>
+      Quiz Reactor
+    </a>
+    <button class="link" id="sound" type="button" aria-pressed="true">Sound on</button>
+  </header>
+
+  <main id="app"></main>
+
+  <dialog id="csv" class="modal" aria-labelledby="csv-title">
+    <div class="modal-body cut">
+      <h2 id="csv-title">Import questions from CSV</h2>
+      <p>Put one question on each row, in this column order:</p>
+      <pre class="format">question, option_a, option_b, option_c, option_d, answer, explanation</pre>
+      <p class="small">The answer can be a letter (A to D), a number (1 to 4) or the answer text itself. The explanation is optional. With a header row you can use 2 to 6 option columns in any order.</p>
+
+      <label class="drop" id="csv-drop">
+        <input type="file" id="csv-file" accept=".csv,.tsv,.txt,text/csv,text/plain">
+        <strong>Drop a CSV file here</strong>
+        <span>or select one from your device</span>
+      </label>
+
+      <label class="field">
+        <span>Or paste the CSV text</span>
+        <textarea id="csv-text" rows="5" spellcheck="false" placeholder="What is 2 + 2?,3,4,5,6,B,Basic arithmetic"></textarea>
+      </label>
+
+      <div id="csv-report" class="report" role="status"></div>
+
+      <label class="field" id="csv-title-field">
+        <span>Quiz title</span>
+        <input type="text" id="csv-name" maxlength="120" placeholder="Imported quiz">
+      </label>
+
+      <div class="modal-foot">
+        <button class="link" type="button" id="csv-template">Download a template</button>
+        <span class="spacer"></span>
+        <button class="btn ghost" type="button" id="csv-cancel">Cancel</button>
+        <button class="btn" type="button" id="csv-ok" disabled>Create quiz</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <noscript><p style="padding:2rem;color:#fff">Quiz Reactor needs JavaScript to run.</p></noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
