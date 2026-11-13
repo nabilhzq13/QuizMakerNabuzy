@@ -35,6 +35,17 @@ Pick a theme from the tiles on the home page or the menu in the top bar. The cho
 
 The music is generated in the browser with WebAudio, so there are no audio files. It starts after the first click or key press, because browsers block sound before that. "Music on" and "Sound on" in the top bar turn the music and the sound effects off separately.
 
+The battles are real-time 3D. The ships, runners, explorer, gorilla and scenery are built in code from simple shapes, so there are no model files either, and they are drawn with custom shaders: two-step toon lighting with a coloured rim, an animated sea, a neon grid, lit windows, torch flames and a glow pass. They use [three.js](https://threejs.org/), which is loaded from the jsDelivr CDN the first time a battle starts. If it cannot be loaded, the battle still runs with the health bars alone.
+
+The motion follows common game-feel practice:
+
+- Joints follow their target poses through springs (second-order dynamics), so the trunk leads and the hands and head lag and overshoot, instead of everything moving in lockstep.
+- Every attack has a readable wind-up, a fast snap, and a follow-through; the defender braces during the wind-up.
+- An impact freezes the world for 50 to 150 ms (hit-stop) while the camera shakes by trauma squared along smooth noise, and the target flashes and is knocked back.
+- Ships float: four points on each hull sample the same waves the sea shader draws, and heave, pitch and roll follow them with weight.
+
+Noise, hashes and the water waves in the shaders come from the [shader-skills](https://github.com/gokayfem/shader-skills) GLSL library (MIT), bundled into `js/glsl-lib.js`.
+
 ## Ways to play
 
 ### Quiz
@@ -106,7 +117,10 @@ Push these files to a repository, then in the repository open Settings, Pages, a
 | `js/app.js` | Views: home, editor, quiz and battle, flashcards, results |
 | `js/themes.js` | The four themes: names, wording, background scene, battle text |
 | `js/shader.js` | WebGL backgrounds (one scene per theme) and the reactor |
-| `js/battle.js` | The battle arena: health bars and the three drawn fights |
+| `js/battle.js` | The battle arena: health bars over the 3D scene |
+| `js/stage3d.js` | The 3D stage: renderer, shaders, post pass, particles, trails, springs, hit-stop and camera shake |
+| `js/glsl-lib.js` | GLSL hashes, noise, fBm, water waves and vignette, bundled from shader-skills |
+| `js/worlds3d.js` | The three fights as 3D models, with their moves and endings |
 | `js/music.js` | The four songs and the synth that plays them |
 | `js/sfx.js` | Sound effects made with WebAudio |
 | `js/audio.js` | The audio context shared by music and sound effects |

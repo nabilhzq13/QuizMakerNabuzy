@@ -530,7 +530,8 @@ function viewPlay(id, mode) {
   function strike(by) {
     hp[by === 'you' ? 'foe' : 'you'] -= 10;
     const after = { ...hp };
-    arena.attack(by).then(() => arena.setHp(after));
+    // the last blow of the battle lands harder
+    arena.attack(by, { weight: S.i === qs.length - 1 ? 2 : 1 }).then(() => arena.setHp(after));
   }
 
   function answer(j) {

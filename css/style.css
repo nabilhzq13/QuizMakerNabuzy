@@ -677,25 +677,11 @@ input[type="text"]:focus, textarea:focus, select:focus {
 .hp.hurt .hp-bar { animation: hp-hurt .4s; }
 .hp-goal { font: 500 .85rem var(--display); letter-spacing: .03em; color: var(--muted); white-space: nowrap; }
 
-.stage { display: block; width: calc(100% + 1.6rem); margin: 0 -.8rem; height: clamp(120px, 25vh, 230px); }
-.stage .react, .stage .bob, .stage .breathe, .stage .flame { transform-box: fill-box; transform-origin: 50% 100%; }
-.stage .bob { animation: bob 5.6s ease-in-out infinite alternate; }
-.stage .foe .bob { animation-duration: 6.4s; animation-delay: -2.3s; }
-.stage .breathe { animation: breathe 3s ease-in-out infinite alternate; }
-.stage .foe .breathe { animation-delay: -1.2s; }
-.stage .flame { animation: flame 1.7s ease-in-out infinite alternate; }
-.stage .sea { animation: drift 18s linear infinite; }
-.stage .sea.mid { animation-duration: 12s; animation-direction: reverse; }
-.stage .sea.front { animation-duration: 9s; }
-.stage .react { transition: transform 2.4s cubic-bezier(.5, 0, .8, .6), opacity 2.4s ease-in; }
-.stage .react.hit { animation: hit .45s ease-out; }
-.stage .won .react { animation: cheer .45s ease-in-out 4 alternate; }
-
-/* how the loser leaves: the ship sinks, the runner flickers out, the gorilla backs into the tomb */
-.arena[data-scene="pirate"] .sunk .react { transform: translateY(78px) rotate(-17deg); opacity: 0; }
-.arena[data-scene="cyber"] .sunk .react { transform: scale(1.1, .03); opacity: 0; transition-duration: .8s; }
-.arena[data-scene="tomb"] .foe.sunk .react { transform: translateX(-80px); opacity: 0; transition-duration: 1.6s; }
-.arena[data-scene="tomb"] .you.sunk .react { transform: translateY(6px) rotate(-86deg); opacity: .55; transition-duration: .9s; }
+/* the 3D scene: a canvas drawn by js/stage3d.js, faded in once the models are built */
+.stage { position: relative; width: calc(100% + 1.6rem); margin: 0 -.8rem; height: clamp(150px, 30vh, 270px); background: var(--void); }
+.stage canvas { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity .5s; }
+.arena.live .stage canvas { opacity: 1; }
+.stage-note { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 1rem; text-align: center; font-size: .9rem; color: var(--muted); }
 
 /* ---------- flashcards ---------- */
 
@@ -872,16 +858,6 @@ body.dragging::after {
   100% { opacity: 0; transform: none; }
 }
 
-/* battle scene */
-@keyframes bob { from { transform: translateY(-1.5px) rotate(-1.2deg); } to { transform: translateY(2px) rotate(1.4deg); } }
-@keyframes breathe { to { transform: scaleY(1.02); } }
-@keyframes flame { to { transform: scale(1.07, 1.16); } }
-@keyframes drift { to { transform: translateX(var(--len, 80px)); } }
-@keyframes hit {
-  15% { transform: translate(-9px, -2px) rotate(-3deg); filter: brightness(2.3); }
-  45% { transform: translate(4px, 1px) rotate(1.5deg); }
-}
-@keyframes cheer { to { transform: translateY(-7px); } }
 @keyframes hp-hurt { 30% { filter: brightness(2.4); } }
 
 /* ---------- small screens ---------- */
@@ -905,7 +881,7 @@ body.dragging::after {
   .hp-num { font-size: .76rem; }
   .hp-goal { grid-column: 1 / -1; grid-row: 2; text-align: center; font-size: .78rem; }
   .arena { padding-top: .5rem; gap: .3rem; }
-  .stage { height: clamp(84px, 14vh, 124px); }
+  .stage { height: clamp(104px, 17vh, 150px); }
   .flash-face { padding: 1.2rem 1.1rem; min-height: clamp(220px, 40vh, 340px); }
 }
 
