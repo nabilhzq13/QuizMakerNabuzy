@@ -530,6 +530,8 @@ input[type="text"]:focus, textarea:focus, select:focus {
   position: relative;
 }
 .play.shake { animation: shake .4s; }
+.below { display: grid; gap: 1rem; min-width: 0; }
+.results .below { width: 100%; justify-items: center; }
 
 .hud { display: flex; align-items: center; gap: 1rem; }
 .progress { flex: 1; display: flex; gap: var(--gap, 4px); min-width: 0; }
@@ -656,32 +658,90 @@ input[type="text"]:focus, textarea:focus, select:focus {
   text-shadow: 0 0 60px color-mix(in srgb, var(--volt) 60%, transparent);
 }
 .countdown span { animation: count .55s ease-out both; }
-.play.waiting > :not(.hud):not(.countdown) { visibility: hidden; }
+.play.waiting > :not(.hud):not(.countdown):not(.arena) { visibility: hidden; }
 
 /* ---------- battle ---------- */
 
-/* the arena stays pinned while the page scrolls to the verdict, so the health bars are always in view */
-.arena-wrap { position: sticky; top: .4rem; z-index: 4; }
-.arena-wrap .streak { position: absolute; inset: auto 0 .45rem 0; text-align: center; transform: none; pointer-events: none; }
-.arena-wrap .streak.bump { animation-name: bump-flat; }
+/* A battle is seen through your own eyes. The 3D scene (js/stage3d.js) is a
+   canvas fixed behind the whole page, faded in once the models are built. The
+   page on top of it has no boxes: health bars at the top, an empty window the
+   enemy is seen through, then the question over a soft shade. */
+.scene3d { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.scene3d canvas { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity .6s; }
+.scene3d.live canvas { opacity: 1; }
+/* a shade at the top so the top bar and the health bars read against a bright sky */
+.scene3d::after { content: ""; position: absolute; inset: 0 0 auto; height: 11rem; background: linear-gradient(to bottom, color-mix(in srgb, var(--void) 78%, transparent), transparent); }
 
-.arena { --c: 16px; display: grid; gap: .5rem; padding: .7rem .8rem 0; width: 100%; overflow: hidden; }
-.hp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .3rem 1rem; align-items: end; }
-.hp-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; font: 700 .92rem var(--display); letter-spacing: .03em; }
+/* the health bars stay pinned while the page scrolls, so they are always in view */
+.arena {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: .3rem 1.2rem;
+  align-items: end;
+  width: 100%;
+  padding: .45rem 0 .5rem;
+  text-shadow: 0 1px 6px var(--void), 0 0 2px var(--void);
+}
+.hp-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; font: 700 1rem var(--display); letter-spacing: .03em; }
 .hp.foe .hp-top { flex-direction: row-reverse; }
-.hp-num { font-weight: 500; color: var(--muted); white-space: nowrap; }
-.hp-bar { height: 11px; background: rgba(255, 255, 255, .13); overflow: hidden; }
-.hp-bar i { display: block; height: 100%; background: var(--ok); transform-origin: left center; transition: transform .4s cubic-bezier(.2, .8, .3, 1), background .2s; }
-.hp.foe .hp-bar i { background: var(--pulse); transform-origin: right center; }
+.hp-num { font-weight: 500; color: var(--text); white-space: nowrap; }
+.hp-bar { height: 14px; padding: 2px; background: color-mix(in srgb, var(--void) 72%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 38%, transparent); overflow: hidden; }
+.hp-bar i { display: block; height: 100%; background: var(--ok); box-shadow: 0 0 10px color-mix(in srgb, var(--ok) 60%, transparent); transform-origin: left center; transition: transform .4s cubic-bezier(.2, .8, .3, 1), background .2s; }
+.hp.foe .hp-bar i { background: var(--pulse); box-shadow: 0 0 10px color-mix(in srgb, var(--pulse) 60%, transparent); transform-origin: right center; }
 .hp.you.low .hp-bar i { background: var(--volt); }
 .hp.hurt .hp-bar { animation: hp-hurt .4s; }
-.hp-goal { font: 500 .85rem var(--display); letter-spacing: .03em; color: var(--muted); white-space: nowrap; }
+.hp-goal { font: 500 .85rem var(--display); letter-spacing: .03em; color: var(--text); white-space: nowrap; }
+[data-theme="pirate"] .hp-bar { border-radius: 7px; }
+[data-theme="pirate"] .hp-bar i { border-radius: 5px; }
 
-/* the 3D scene: a canvas drawn by js/stage3d.js, faded in once the models are built */
-.stage { position: relative; width: calc(100% + 1.6rem); margin: 0 -.8rem; height: clamp(150px, 30vh, 270px); background: var(--void); }
-.stage canvas { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity .5s; }
-.arena.live .stage canvas { opacity: 1; }
+/* the gap the enemy is seen through; the camera is aimed so the enemy sits inside it */
+.battle-window { position: relative; width: 100%; height: clamp(150px, 32vh, 380px); pointer-events: none; }
+.battle-window .streak { position: absolute; inset: auto 0 .2rem 0; text-align: center; transform: none; }
+.battle-window .streak.bump { animation-name: bump-flat; }
 .stage-note { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 1rem; text-align: center; font-size: .9rem; color: var(--muted); }
+
+/* everything under the window sits on a shade that fades in from the scene */
+.battle .below { position: relative; isolation: isolate; }
+.battle .below::before {
+  content: "";
+  position: absolute;
+  /* exactly as wide as the screen: anything wider makes phones widen the whole page */
+  inset: -2.2rem calc(50% - 50vw) -4rem;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--void) 74%, transparent) 3.2rem, color-mix(in srgb, var(--void) 74%, transparent) calc(100% - 3.5rem), transparent);
+}
+.play.battle { gap: .6rem; }
+.play.battle .hud { text-shadow: 0 1px 6px var(--void); }
+.play.battle .progress i { background: color-mix(in srgb, var(--void) 55%, rgba(255, 255, 255, .3)); }
+.play.battle .progress i.ok { background: var(--ok); }
+.play.battle .progress i.bad { background: var(--pulse); }
+.play.battle .progress i.now { background: var(--volt); }
+
+/* the verdict comes up from the bottom edge, so the page never scrolls the question over the fight */
+.play.battle { padding-bottom: 7rem; }
+.play.battle .after { min-height: 0; }
+.play.battle .after:not(:empty) {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 6;
+  align-items: center;
+  padding: .8rem max(clamp(1rem, 4vw, 2.5rem), calc((100vw - 900px) / 2)) calc(.8rem + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--void) 90%, transparent);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  animation: sheet .28s cubic-bezier(.2, .8, .3, 1) backwards;
+}
+.play.battle .verdict { background: none; padding: 0 0 0 1rem; animation: none; }
+
+/* on a short screen the sheet drops its last line, so it covers less of the answers */
+@media (max-height: 720px) { .play.battle .blow { display: none; } }
+
+.results.battle .arena { justify-self: stretch; }
+.results.battle .battle-window { height: clamp(150px, 34vh, 400px); }
 
 /* ---------- flashcards ---------- */
 
@@ -859,6 +919,7 @@ body.dragging::after {
 }
 
 @keyframes hp-hurt { 30% { filter: brightness(2.4); } }
+@keyframes sheet { from { transform: translateY(100%); } }
 
 /* ---------- small screens ---------- */
 
@@ -875,13 +936,17 @@ body.dragging::after {
   .brand span { display: none; }
   .controls { gap: .3rem .75rem; }
   .theme-pick select { max-width: 8.6rem; font-size: .85rem; }
-  .hp-row { grid-template-columns: 1fr 1fr; }
-  .hp-top { font-size: .8rem; gap: .3rem; }
+  .below { gap: .7rem; }
+  .arena { grid-template-columns: 1fr 1fr; gap: .2rem .8rem; }
+  .hp-top { font-size: .82rem; gap: .3rem; }
   .hp-name { white-space: nowrap; }
-  .hp-num { font-size: .76rem; }
+  .hp-num { font-size: .78rem; }
+  .hp-bar { height: 12px; }
   .hp-goal { grid-column: 1 / -1; grid-row: 2; text-align: center; font-size: .78rem; }
-  .arena { padding-top: .5rem; gap: .3rem; }
-  .stage { height: clamp(104px, 17vh, 150px); }
+  .battle-window { height: clamp(120px, 25vh, 230px); }
+  .results.battle .battle-window { height: clamp(130px, 30vh, 260px); }
+  .play.battle .after:not(:empty) { gap: .6rem; }
+  .play.battle .after .btn { width: 100%; }
   .flash-face { padding: 1.2rem 1.1rem; min-height: clamp(220px, 40vh, 340px); }
 }
 

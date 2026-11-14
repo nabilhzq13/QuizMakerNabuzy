@@ -331,7 +331,7 @@ const MODES = {
   results: { speed: 0.12, dim: 0.55, look: 0.2 },
 };
 
-const STUB = { setMode() {}, setHeat() {}, setScene() {}, pulse() {}, glitch() {} };
+const STUB = { pause() {}, setMode() {}, setHeat() {}, setScene() {}, pulse() {}, glitch() {} };
 
 export function initBackground(canvas) {
   const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'high-performance' });
@@ -416,7 +416,10 @@ export function initBackground(canvas) {
   let last = performance.now();
   let raf = 0;
 
+  let paused = false;
+
   function frame(now) {
+    if (paused) return;
     raf = requestAnimationFrame(frame);
     const rawDt = (now - last) / 1000;
     last = now;
@@ -466,11 +469,18 @@ export function initBackground(canvas) {
 
   document.addEventListener('visibilitychange', () => {
     cancelAnimationFrame(raf);
-    if (!document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); }
+    if (!document.hidden && !paused) { last = performance.now(); raf = requestAnimationFrame(frame); }
   });
   raf = requestAnimationFrame(frame);
 
   return {
+    /** Stop drawing while something else covers the whole screen (a 3D battle), and start again after. */
+    pause(on) {
+      if (paused === on) return;
+      paused = on;
+      cancelAnimationFrame(raf);
+      if (!on && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); }
+    },
     /** Switch scene mood and tell the reactor which element to sit in (or null to hide it). */
     setMode(name, slot = null) { s.mode = MODES[name] || MODES.home; s.slot = slot; },
     /** 0..1, how hot the streak is. */

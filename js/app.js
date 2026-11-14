@@ -443,7 +443,8 @@ function viewPlay(id, mode) {
   const maxHp = qs.length * 10;
   const need = Math.ceil(qs.length / 2);
   const hp = { you: maxHp, foe: maxHp };
-  const arena = battle ? createArena(theme.id, { labels: world.battle, maxHp, need }) : null;
+  // the 3D scene covers the whole screen, so the background shader rests while it is up
+  const arena = battle ? createArena(theme.id, { labels: world.battle, maxHp, need, onScene: live => bg.pause(live) }) : null;
 
   const S = { i: 0, score: 0, shown: 0, streak: 0, bestStreak: 0, correct: 0, log: [], locked: true, raf: 0, qStart: 0, lastTick: 6, t0: 0, done: false };
   const timers = [];
@@ -451,7 +452,7 @@ function viewPlay(id, mode) {
 
   setView('play');
   app.innerHTML = `
-    <div class="play waiting">
+    <div class="play waiting${battle ? ' battle' : ''}">
       <div class="hud">
         <a class="link" href="#/">Quit</a>
         <div class="progress" style="--gap:${qs.length > 30 ? 1 : 4}px" role="img" aria-label="Progress">${qs.map(() => '<i></i>').join('')}</div>
@@ -459,13 +460,15 @@ function viewPlay(id, mode) {
           ? `<div class="score" aria-label="Hits landed, ${need} needed to win"><span class="score-n">0</span><small> / ${need}</small></div>`
           : '<div class="score" aria-label="Score"><span class="score-n">0</span></div>'}
       </div>
-      <div class="${battle ? 'arena-wrap' : 'reactor-slot'}"><div class="streak" role="status"></div></div>
-      <div class="timer"${limit ? '' : ' hidden'}><i></i></div>
-      <div class="qwrap">
-        <p class="qcount"></p>
-        <h2 class="qtext"></h2>
+      <div class="${battle ? 'battle-window' : 'reactor-slot'}"><div class="streak" role="status"></div></div>
+      <div class="below">
+        <div class="timer"${limit ? '' : ' hidden'}><i></i></div>
+        <div class="qwrap">
+          <p class="qcount"></p>
+          <h2 class="qtext"></h2>
+        </div>
+        <div class="answers"></div>
       </div>
-      <div class="answers"></div>
       <div class="after"></div>
     </div>`;
 
@@ -474,7 +477,11 @@ function viewPlay(id, mode) {
     streak: $('.streak'), timer: $('.timer'), bar: $('.timer i'), qwrap: $('.qwrap'),
     count: $('.qcount'), text: $('.qtext'), answers: $('.answers'), after: $('.after'),
   };
-  if (arena) $('.arena-wrap').prepend(arena.el);
+  if (arena) {
+    // health bars at the very top; the enemy is seen through the gap under them
+    els.play.prepend(arena.el);
+    arena.setWindow($('.battle-window'));
+  }
   bg.setMode('play', battle ? null : $('.reactor-slot'));
   music.setBattle(battle);
 
@@ -576,10 +583,12 @@ function viewPlay(id, mode) {
       S.streak = 0;
       bg.glitch();
       sfx.wrong();
-      els.play.classList.remove('shake');
-      void els.play.offsetWidth;
-      els.play.classList.add('shake');
-      if (battle) strike('foe');
+      if (battle) strike('foe'); // the view itself shakes when the enemy's shot lands
+      else {
+        els.play.classList.remove('shake');
+        void els.play.offsetWidth;
+        els.play.classList.add('shake');
+      }
     }
 
     bg.setHeat(S.streak / 5);
@@ -671,24 +680,28 @@ function viewPlay(id, mode) {
     if (battle) {
       const won = S.correct >= need;
       app.innerHTML = `
-        <div class="results">
+        <div class="results battle">
           <div class="arena-slot"></div>
-          <p class="rank${won ? '' : ' lost'}">${won ? world.battle.win : world.battle.lose}</p>
-          <p class="outcome">You needed ${need} correct ${need === 1 ? 'answer' : 'answers'} and got ${S.correct}.${won ? '' : ' Restart the battle to try again.'}</p>
-          <dl class="stats">
-            <div><dt>Correct</dt><dd>${S.correct} of ${qs.length}</dd></div>
-            <div><dt>Your health</dt><dd>${hp.you} of ${maxHp}</dd></div>
-            <div><dt>Enemy health</dt><dd>${hp.foe} of ${maxHp}</dd></div>
-            <div><dt>Time</dt><dd>${time}</dd></div>
-          </dl>
-          <div class="row center">
-            <button class="btn big" data-act="again">${won ? 'Battle again' : 'Restart battle'}</button>
-            ${links}
+          <div class="battle-window"></div>
+          <div class="below">
+            <p class="rank${won ? '' : ' lost'}">${won ? world.battle.win : world.battle.lose}</p>
+            <p class="outcome">You needed ${need} correct ${need === 1 ? 'answer' : 'answers'} and got ${S.correct}.${won ? '' : ' Restart the battle to try again.'}</p>
+            <dl class="stats">
+              <div><dt>Correct</dt><dd>${S.correct} of ${qs.length}</dd></div>
+              <div><dt>Your health</dt><dd>${hp.you} of ${maxHp}</dd></div>
+              <div><dt>Enemy health</dt><dd>${hp.foe} of ${maxHp}</dd></div>
+              <div><dt>Time</dt><dd>${time}</dd></div>
+            </dl>
+            <div class="row center">
+              <button class="btn big" data-act="again">${won ? 'Battle again' : 'Restart battle'}</button>
+              ${links}
+            </div>
+            ${review}
           </div>
-          ${review}
         </div>`;
-      // carry the arena over, so the last shot can land and the loser can leave the scene
+      // carry the scene over, so the last shot can land and the loser can leave it
       $('.arena-slot').replaceWith(arena.el);
+      arena.setWindow($('.battle-window'));
       arena.setHp(hp);
       arena.finish(won ? 'you' : 'foe');
       bg.setMode('results');

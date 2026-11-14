@@ -450,7 +450,7 @@ void main(){
 
 const MIX_FRAG = `
 uniform sampler2D tex, glow;
-uniform float strength, aberration, exposure, aspect;
+uniform float strength, aberration, exposure, aspect, hurt;
 varying vec2 vUv;
 ${GLSL_LIB}
 void main(){
@@ -459,7 +459,10 @@ void main(){
   vec2 shift = c * aberration;
   vec3 col = vec3(texture2D(tex, vUv + shift).r, texture2D(tex, vUv).g, texture2D(tex, vUv - shift).b);
   col += texture2D(glow, vUv).rgb * strength;
-  col *= exposure * mix(1.0, vignette(c * vec2(aspect, 1.0) * 2.0, 2.2), 0.55);
+  col *= exposure * mix(1.0, vignette(c * vec2(min(aspect, 1.8), 1.0) * 2.0, 2.2), 0.5);
+  // taking a hit: the edges of your view go red
+  float edge = smoothstep(0.25, 0.75, length(c * vec2(1.0, 1.25)));
+  col = mix(col, vec3(0.85, 0.06, 0.05) * (0.35 + dot(col, vec3(0.4))), clamp(hurt, 0.0, 1.0) * edge * 0.8);
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -484,7 +487,7 @@ class Post {
     this.blur = new T.ShaderMaterial({ ...flat, fragmentShader: BLUR_FRAG, uniforms: { tex: { value: null }, dir: { value: new T.Vector2() }, threshold: { value: 0 } } });
     this.mix = new T.ShaderMaterial({
       ...flat, fragmentShader: MIX_FRAG,
-      uniforms: { tex: { value: null }, glow: { value: null }, strength: { value: 1 }, aberration: { value: 0 }, exposure: { value: 1 }, aspect: { value: 1 } },
+      uniforms: { tex: { value: null }, glow: { value: null }, strength: { value: 1 }, aberration: { value: 0 }, exposure: { value: 1 }, aspect: { value: 1 }, hurt: { value: 0 } },
     });
   }
 
@@ -506,7 +509,7 @@ class Post {
     this.renderer.render(this.scene, this.camera);
   }
 
-  render(scene, camera, aberration, exposure) {
+  render(scene, camera, aberration, exposure, hurt) {
     const r = this.renderer;
     r.setRenderTarget(this.full);
     r.render(scene, camera);
@@ -522,6 +525,7 @@ class Post {
     u.strength.value = this.strength;
     u.aberration.value = aberration;
     u.exposure.value = exposure;
+    u.hurt.value = hurt;
     r.setRenderTarget(null);
     r.render(this.scene, this.camera);
   }
@@ -717,9 +721,20 @@ export class Stage {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = T.LinearSRGBColorSpace;
     this.scene = new T.Scene();
-    this.camera = new T.PerspectiveCamera(30, 3, 0.1, 300);
-    this.halfWidth = 8.2; // how much of the scene, left to right, always stays in view
-    this.sway = calm.matches ? 0 : 0.25;
+    this.camera = new T.PerspectiveCamera(48, 1.6, 0.05, 300);
+    this.camera.rotation.order = 'YXZ';
+    this.scene.add(this.camera);
+    // things you hold are parented to the camera, so they stay in view: a hand, a weapon, the ship's rail
+    this.hands = new T.Group();
+    this.camera.add(this.hands);
+    // first-person view: where your eyes are, what you face, and how big it is (width, height)
+    this.pov = { eye: new T.Vector3(0, 1.6, 0), target: new T.Vector3(0, 1.1, -7), size: [2.4, 2.4], tan: 0.45, pitch: 0, frameY: 0.33, bottom: -0.05 };
+    this.frame3d = null; // the page element the enemy should appear inside
+    this.resizeFns = new Set();
+    // your own body: sinking, falling over, flinching
+    this.head = { drop: new Spring(0.5, 0.9), fall: new Spring(0.9, 0.7), tilt: new Spring(0.6, 0.6), dropTo: 0, fallTo: 0, tiltTo: 0 };
+    this.hurtLevel = new Spring(3, 0.9);
+    this.sway = calm.matches ? 0 : 0.05;
     this.time = 0;
     this.alive = true;
     this.tasks = new Set();
@@ -771,30 +786,79 @@ export class Stage {
     if (this.post) { this.post.strength = glow; this.post.threshold = glowFrom; }
   }
 
-  /** How wide a slice of the scene the camera frames. Smaller brings the fighters closer. */
-  setView(halfWidth) {
-    this.halfWidth = halfWidth;
+  /**
+   * Set up the first-person view: `eye` is where you stand, `target` the middle
+   * of the enemy, `size` its width and height. The camera is then aimed and
+   * zoomed so the enemy fills the free part of the screen (see frameOn).
+   */
+  setPov({ eye, target, size }) {
+    this.pov.eye.set(...eye);
+    this.pov.target.set(...target);
+    this.pov.size = size;
     this.resize();
+  }
+
+  /** The page element the enemy should be framed in: the gap between the health bars and the question. */
+  frameOn(element) {
+    this.frame3d = element;
+    this.resize();
+  }
+
+  /** Run fn() now and whenever the view changes shape, e.g. to put a held object back in its corner. */
+  onResize(fn) {
+    this.resizeFns.add(fn);
+    if (this.sized) fn();
+  }
+
+  /** A point in front of the camera, in camera space: x and y from -1 to 1 across the screen, at a depth. */
+  screenPoint(x, y, depth) {
+    return new T.Vector3(x * this.pov.tan * this.camera.aspect * depth, y * this.pov.tan * depth, -depth);
+  }
+
+  /** The same point in world space. */
+  facePoint(x, y, depth) {
+    this.camera.updateMatrixWorld();
+    return this.camera.localToWorld(this.screenPoint(x, y, depth));
   }
 
   resize() {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     if (!w || !h) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // full screen is a lot of pixels: cap the sharpness so phones and big monitors stay smooth
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2.4e6 / (w * h)));
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
     this.post?.setSize(Math.round(w * dpr), Math.round(h * dpr));
 
-    // pull the camera back until the fixed width fits, then frame the ground near the bottom edge
-    const half = Math.tan(this.camera.fov * Math.PI / 360);
-    this.dist = this.halfWidth / (half * (w / h));
-    const height = 2 * half * this.dist;
-    this.lookY = height * 0.34;
-    this.camera.aspect = w / h;
+    // where on the screen the enemy goes: the middle of the free window, measured as if scrolled to the top
+    const p = this.pov;
+    let middle = 0.33, tall = 0.3;
+    if (this.frame3d?.isConnected) {
+      const r = this.frame3d.getBoundingClientRect();
+      if (r.height > 10) {
+        middle = (r.top + window.scrollY + r.height / 2) / h;
+        tall = r.height / h;
+      }
+    }
+    p.frameY = 1 - 2 * middle;          // screen centre of the window, from -1 (bottom) to 1 (top)
+    p.bottom = p.frameY - tall;         // its bottom edge
+    // zoom so the enemy fits the window both ways
+    const aspect = w / h;
+    const dist = Math.hypot(p.target.x - p.eye.x, p.target.z - p.eye.z);
+    p.tan = Math.min(Math.tan(41 * Math.PI / 180), Math.max(
+      Math.tan(21 * Math.PI / 180),
+      p.size[0] / (2 * dist * aspect * 0.86),
+      p.size[1] / (2 * dist * tall * 0.94),
+    ));
+    // tilt down so the enemy sits in the window instead of the middle of the screen
+    p.pitch = Math.atan2(p.target.y - p.eye.y, dist) - Math.atan(p.frameY * p.tan);
+    this.camera.fov = 2 * Math.atan(p.tan) * 180 / Math.PI;
+    this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
-    this.particles.material.uniforms.uScale.value = (h * dpr) / (2 * half);
+    this.particles.material.uniforms.uScale.value = (h * dpr) / (2 * p.tan);
     this.sized = true;
+    this.resizeFns.forEach(fn => fn());
   }
 
   start() {
@@ -821,28 +885,39 @@ export class Stage {
     this.updateCamera(real);
     for (const task of [...this.tasks]) task(dt, this.time);
     this.particles.update(dt);
-    if (this.post) this.post.render(this.scene, this.camera, this.split.y, this.exposure.y);
+    if (this.post) this.post.render(this.scene, this.camera, this.split.y, this.exposure.y, this.hurtLevel.y);
     else this.renderer.render(this.scene, this.camera);
   }
 
   updateCamera(real) {
     const c = this.camera;
+    const p = this.pov;
+    const h = this.head;
     // trauma decays steadily; the shake grows with its square, so small hits stay small
     this.trauma = Math.max(0, this.trauma - real * 1.5);
     const shake = this.trauma * this.trauma;
     const t = performance.now() / 1000 * 11;
     const push = this.zoom.update(real, 0);
-    const dist = this.dist * (1 - push);
+    const sx = wobble(t, 1) * 0.07 * shake;
+    const sy = wobble(t, 2) * 0.05 * shake;
+    // a slow, small sway of the head, plus whatever the scene adds (a rolling deck)
+    const breathe = Math.sin(this.time * 0.9) * 0.012 * (this.sway ? 1 : 0);
     c.position.set(
-      Math.sin(this.time * 0.2) * this.sway + wobble(t, 1) * 0.32 * shake,
-      this.lookY + 0.9 + wobble(t, 2) * 0.22 * shake,
-      dist,
+      p.eye.x + Math.sin(this.time * 0.23) * this.sway + sx,
+      p.eye.y + breathe + h.drop.update(real, h.dropTo) + (this.ride?.y ?? 0) + sy,
+      p.eye.z - push * 1.6,
     );
-    c.lookAt(0, this.lookY, 0);
-    c.rotateZ(wobble(t, 3) * 0.035 * shake);
+    c.rotation.set(
+      p.pitch + h.fall.update(real, h.fallTo) + wobble(t, 4) * 0.02 * shake,
+      wobble(t, 5) * 0.02 * shake,
+      h.tilt.update(real, h.tiltTo) + (this.ride?.roll ?? 0) + wobble(t, 3) * 0.03 * shake,
+    );
+    // held things lag a little behind the head, which is what makes them feel held and not glued on
+    this.hands.position.set(-sx * 0.6, -sy * 0.6 - breathe * 0.5, 0);
     this.split.update(real, this.splitTarget);
     this.splitTarget = 0;
     this.exposure.update(real, 1);
+    this.hurtLevel.update(real, 0);
   }
 
   // ---- game feel ----
@@ -865,6 +940,11 @@ export class Stage {
     this.exposure.kick(5 * amount);
     this.split.kick(0.5 * amount);
     this.zoom.kick(0.5 * amount);
+  }
+
+  /** You were hit: the edges of the view flash red. */
+  hurt(amount = 1) {
+    this.hurtLevel.y = Math.min(1.2, this.hurtLevel.y + amount);
   }
 
   // ---- timing ----

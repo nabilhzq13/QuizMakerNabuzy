@@ -29,13 +29,13 @@ Pick a theme from the tiles on the home page or the menu in the top bar. The cho
 | Theme | Background | Music | Battle |
 | --- | --- | --- | --- |
 | Hacker terminal | Green wireframe corridor | Dark, steady pulse | None, quiz and flashcards only |
-| Pirate seas | Night sea under the moon | A jig | Two ships trade cannon fire, and the crew join in with muskets |
-| Cyberpunk city | Neon skyline over a wet street | Slow synthwave | Two runners throw light discs |
-| Jungle tomb | Torch-lit stone passage | Hand drums, marimba and flute | You throw a stone-tipped spear, the gorilla throws rocks |
+| Pirate seas | Night sea under the moon | A jig | From your deck you fire a cannon at an enemy ship while the crew join in with muskets, and she fires back |
+| Cyberpunk city | Neon skyline over a wet street | Slow synthwave | You and a rival runner throw light discs at each other on the grid |
+| Jungle tomb | Torch-lit stone passage | Hand drums, marimba and flute | You throw stone-tipped spears at the gorilla guarding the tomb door, and it throws rocks |
 
 The music is generated in the browser with WebAudio, so there are no audio files. It starts after the first click or key press, because browsers block sound before that. "Music on" and "Sound on" in the top bar turn the music and the sound effects off separately.
 
-The battles are real-time 3D. The ships, runners, explorer, gorilla and scenery are built in code from simple shapes, so there are no model files either, and they are drawn with custom shaders: two-step toon lighting with a coloured rim, an animated sea, a neon grid, lit windows, torch flames and a glow pass. They use [three.js](https://threejs.org/), which is loaded from the jsDelivr CDN the first time a battle starts. If it cannot be loaded, the battle still runs with the health bars alone.
+The battles are real-time 3D and seen through your own eyes. The scene fills the whole screen behind the quiz, the enemy faces you in the gap between the health bars at the top and the question, and you see your own cannon, disc or spear in front of you. When the enemy hits you the view shakes and its edges flash red. The ships, runners, gorilla and scenery are built in code from simple shapes, so there are no model files either, and they are drawn with custom shaders: two-step toon lighting with a coloured rim, an animated sea, a neon grid, lit windows, torch flames and a glow pass. They use [three.js](https://threejs.org/), which is loaded from the jsDelivr CDN the first time a battle starts. If it cannot be loaded, the battle still runs with the health bars alone.
 
 The motion follows common game-feel practice:
 
@@ -117,10 +117,11 @@ Push these files to a repository, then in the repository open Settings, Pages, a
 | `js/app.js` | Views: home, editor, quiz and battle, flashcards, results |
 | `js/themes.js` | The four themes: names, wording, background scene, battle text |
 | `js/shader.js` | WebGL backgrounds (one scene per theme) and the reactor |
-| `js/battle.js` | The battle arena: health bars over the 3D scene |
-| `js/stage3d.js` | The 3D stage: renderer, shaders, post pass, particles, trails, springs, hit-stop and camera shake |
+| `js/battle.js` | The battle: health bars at the top of the page over a fullscreen 3D scene |
+| `js/stage3d.js` | The 3D stage: renderer, first-person camera, shaders, post pass, particles, trails, springs, hit-stop and camera shake |
 | `js/glsl-lib.js` | GLSL hashes, noise, fBm, water waves and vignette, bundled from shader-skills |
-| `js/worlds3d.js` | The three fights as 3D models, with their moves and endings |
+| `js/pov3d.js` | The three fights in first person: scenery, what you hold, both sides' attacks and the endings |
+| `js/models3d.js` | The ships, runner and gorilla as 3D models, and how they move |
 | `js/music.js` | The four songs and the synth that plays them |
 | `js/sfx.js` | Sound effects made with WebAudio |
 | `js/audio.js` | The audio context shared by music and sound effects |
