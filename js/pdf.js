@@ -1,16 +1,17 @@
 // Reads the text out of a PDF, entirely in the browser.
 //
 // Pages that carry real text are read directly. Pages that are only a picture
-// (a scan or a photo) are drawn to a canvas and read with OCR. The two
-// libraries are fetched from a CDN the first time they are needed; the PDF
-// itself never leaves the device.
+// (a scan or a photo) are drawn to a canvas and read with OCR (ocr.js), which
+// also reads handwriting. The libraries are fetched from a CDN the first time
+// they are needed; the PDF itself never leaves the device.
+
+import { createReader } from './ocr.js';
 
 const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/';
-const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js';
 
 export const MAX_PAGES = 60;
 
-/** code: 'library' | 'ocr' | 'locked' | 'broken' */
+/** code: 'library' | 'ocr' | 'hand' | 'locked' | 'broken' */
 export class PdfError extends Error {
   constructor(code, cause) {
     super(code);
@@ -27,12 +28,6 @@ function loadPdfjs() {
   });
   pdfjsLoading.catch(() => { pdfjsLoading = null; }); // let the next import try again
   return pdfjsLoading;
-}
-
-async function startOcr() {
-  const lib = await import(TESSERACT);
-  const createWorker = lib.createWorker || lib.default?.createWorker;
-  return createWorker('eng');
 }
 
 /** Rebuild lines of text from the positioned fragments pdf.js gives back. */
@@ -68,25 +63,29 @@ function toLines(items) {
   return lines;
 }
 
-async function ocrPage(page, worker) {
+async function ocrPage(page, reader) {
   const base = page.getViewport({ scale: 1 });
   const scale = Math.min(3, 2400 / Math.max(base.width, base.height)); // about 200 dpi for an A4 page
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-  const { data } = await worker.recognize(canvas);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  const res = await reader.read(canvas);
   canvas.width = canvas.height = 0;
-  return data.text.split('\n').map(l => l.trim());
+  return res;
 }
 
 /**
- * Read a PDF file.
- * onProgress({ page, pages, ocr }) is called as each page starts.
- * Resolves to { text, pages, total, ocrPages }, or null if isCancelled() turned true.
+ * Read a PDF file. mode says how scanned pages are read: 'auto', 'print' or 'hand'.
+ * onProgress({ page, pages, ocr, stage, done, total }) is called as each page starts,
+ * and while a scanned page is read (stage, done and total come from ocr.js).
+ * Resolves to { text, pages, total, ocrPages, handPages }, or null if isCancelled() turned true.
  */
-export async function readPdf(file, { onProgress = () => {}, isCancelled = () => false } = {}) {
+export async function readPdf(file, { mode = 'auto', onProgress = () => {}, isCancelled = () => false } = {}) {
   let pdfjs;
   try { pdfjs = await loadPdfjs(); } catch (err) { throw new PdfError('library', err); }
 
@@ -101,10 +100,12 @@ export async function readPdf(file, { onProgress = () => {}, isCancelled = () =>
   const pages = Math.min(total, MAX_PAGES);
   const out = [];
   const ocrPages = [];
-  let worker = null;
+  const handPages = [];
+  let n = 0;
+  const reader = createReader({ mode, onStatus: st => onProgress({ page: n, pages, ocr: true, ...st }) });
 
   try {
-    for (let n = 1; n <= pages; n++) {
+    for (n = 1; n <= pages; n++) {
       if (isCancelled()) return null;
       onProgress({ page: n, pages, ocr: false });
       const page = await doc.getPage(n);
@@ -113,17 +114,21 @@ export async function readPdf(file, { onProgress = () => {}, isCancelled = () =>
       if (lines.join('').replace(/\s/g, '').length < 25) {
         // next to no text on the page: treat it as a scan
         onProgress({ page: n, pages, ocr: true });
-        try { worker ??= await startOcr(); } catch (err) { throw new PdfError('ocr', err); }
+        let read;
+        try { read = await ocrPage(page, reader); } catch (err) { throw new PdfError(err?.code === 'hand' ? 'hand' : 'ocr', err); }
         if (isCancelled()) return null;
-        const read = await ocrPage(page, worker);
-        if (read.join('').trim()) { lines = read; ocrPages.push(n); }
+        if (read.lines.join('').trim()) {
+          lines = read.lines;
+          ocrPages.push(n);
+          if (read.hand) handPages.push(n);
+        }
       }
       out.push(lines.join('\n'));
       page.cleanup();
     }
   } finally {
-    worker?.terminate();
+    reader.close();
     doc.destroy();
   }
-  return { text: out.join('\n\n').trim(), pages, total, ocrPages };
+  return { text: out.join('\n\n').trim(), pages, total, ocrPages, handPages };
 }

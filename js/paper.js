@@ -205,7 +205,10 @@ const tidy = s => s.replace(/\s+/g, ' ').trim();
  * Returns { questions, notes: [{ n, msg }], unanswered }.
  */
 export function parsePaper(text) {
-  const raw = String(text).replace(/\r\n?/g, '\n').split('\n').map(l => l.replace(/[ \t]/g, ' ').replace(/\s+/g, ' ').trim());
+  const raw = String(text).replace(/\r\n?/g, '\n').split('\n').map(l => l.replace(/[ \t]/g, ' ').replace(/\s+/g, ' ').trim()
+    // OCR often drops the space after a label: "A.3", "B)Jupiter", "1.What is"
+    .replace(/^(\(?[A-Fa-f][.)])(?=[0-9A-Z(\[$£€+\-−])/, '$1 ')
+    .replace(/^(\d{1,3}[.)])(?=[A-Z(])/, '$1 '));
   const { lines, key } = takeKey(raw);
 
   const ready = list => list.filter(q => q.text.join('').trim() && q.options.filter(o => o.trim()).length >= 2);

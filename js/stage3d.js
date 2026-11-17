@@ -767,7 +767,7 @@ export class Stage {
 
     this.resize = this.resize.bind(this);
     this.frame = this.frame.bind(this);
-    this.observer = new ResizeObserver(this.resize);
+    this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
     this.resize();
   }
@@ -795,12 +795,15 @@ export class Stage {
     this.pov.eye.set(...eye);
     this.pov.target.set(...target);
     this.pov.size = size;
-    this.resize();
+    this.resize(true);
   }
 
   /** The page element the enemy should be framed in: the gap between the health bars and the question. */
   frameOn(element) {
+    if (this.frame3d && this.frame3d !== element) this.observer.unobserve(this.frame3d);
     this.frame3d = element;
+    // the window grows and shrinks with the question below it; follow it smoothly
+    if (element) this.observer.observe(element);
     this.resize();
   }
 
@@ -821,18 +824,24 @@ export class Stage {
     return this.camera.localToWorld(this.screenPoint(x, y, depth));
   }
 
-  resize() {
+  resize(force = false) {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     if (!w || !h) return;
-    // full screen is a lot of pixels: cap the sharpness so phones and big monitors stay smooth
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2.4e6 / (w * h)));
-    this.renderer.setPixelRatio(dpr);
-    this.renderer.setSize(w, h, false);
-    this.post?.setSize(Math.round(w * dpr), Math.round(h * dpr));
+    // the canvas changed shape (window resized, phone turned): jump straight to the new framing
+    const snap = w !== this.size?.[0] || h !== this.size?.[1];
+    if (snap) {
+      this.size = [w, h];
+      // full screen is a lot of pixels: cap the sharpness so phones and big monitors stay smooth
+      const dpr = this.dpr = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2.4e6 / (w * h)));
+      this.renderer.setPixelRatio(dpr);
+      this.renderer.setSize(w, h, false);
+      this.post?.setSize(Math.round(w * dpr), Math.round(h * dpr));
+    }
 
     // where on the screen the enemy goes: the middle of the free window, measured as if scrolled to the top
     const p = this.pov;
+    const goal = this.goal = {};
     let middle = 0.33, tall = 0.3;
     if (this.frame3d?.isConnected) {
       const r = this.frame3d.getBoundingClientRect();
@@ -841,24 +850,46 @@ export class Stage {
         tall = r.height / h;
       }
     }
-    p.frameY = 1 - 2 * middle;          // screen centre of the window, from -1 (bottom) to 1 (top)
-    p.bottom = p.frameY - tall;         // its bottom edge
+    goal.frameY = 1 - 2 * middle;          // screen centre of the window, from -1 (bottom) to 1 (top)
+    goal.bottom = goal.frameY - tall;      // its bottom edge
     // zoom so the enemy fits the window both ways
     const aspect = w / h;
     const dist = Math.hypot(p.target.x - p.eye.x, p.target.z - p.eye.z);
-    p.tan = Math.min(Math.tan(41 * Math.PI / 180), Math.max(
+    goal.tan = Math.min(Math.tan(41 * Math.PI / 180), Math.max(
       Math.tan(21 * Math.PI / 180),
       p.size[0] / (2 * dist * aspect * 0.86),
       p.size[1] / (2 * dist * tall * 0.94),
     ));
     // tilt down so the enemy sits in the window instead of the middle of the screen
-    p.pitch = Math.atan2(p.target.y - p.eye.y, dist) - Math.atan(p.frameY * p.tan);
-    this.camera.fov = 2 * Math.atan(p.tan) * 180 / Math.PI;
+    goal.pitch = Math.atan2(p.target.y - p.eye.y, dist) - Math.atan(goal.frameY * goal.tan);
     this.camera.aspect = aspect;
-    this.camera.updateProjectionMatrix();
-    this.particles.material.uniforms.uScale.value = (h * dpr) / (2 * p.tan);
+    if (snap || force || !this.sized) {
+      Object.assign(p, goal);
+      this.applyLens();
+    }
     this.sized = true;
+  }
+
+  /** Point the lens at the current framing, and move held things to match. */
+  applyLens() {
+    const p = this.pov;
+    this.camera.fov = 2 * Math.atan(p.tan) * 180 / Math.PI;
+    this.camera.updateProjectionMatrix();
+    this.particles.material.uniforms.uScale.value = (this.size[1] * this.dpr) / (2 * p.tan);
     this.resizeFns.forEach(fn => fn());
+  }
+
+  /** Ease the framing towards its goal, so a window that changes height doesn't make the view jump. */
+  followFrame(real) {
+    if (!this.goal) return;
+    const p = this.pov;
+    const k = 1 - Math.exp(-real * 7);
+    let moving = false;
+    for (const key of ['frameY', 'bottom', 'tan', 'pitch']) {
+      const d = this.goal[key] - p[key];
+      if (Math.abs(d) > 1e-5) { p[key] += d * k; moving = true; } else p[key] = this.goal[key];
+    }
+    if (moving) this.applyLens();
   }
 
   start() {
@@ -893,6 +924,7 @@ export class Stage {
     const c = this.camera;
     const p = this.pov;
     const h = this.head;
+    this.followFrame(real);
     // trauma decays steadily; the shake grows with its square, so small hits stay small
     this.trauma = Math.max(0, this.trauma - real * 1.5);
     const shake = this.trauma * this.trauma;

@@ -5,6 +5,7 @@ A multiple-choice quiz maker with four themes, each with its own look, WebGL bac
 - Write questions by hand in the editor, with 2 to 6 answers each
 - Import questions from a CSV file, by file picker, drag and drop, or paste
 - Import a PDF question paper, including scanned pages, which are read with OCR
+- Import photos of a question paper (JPG, PNG or iPhone HEIC), printed or handwritten, or take one with the phone camera
 - Play a quiz three ways: a timed quiz with streak multipliers, a battle with health bars, or flashcards
 - Pick a theme: Hacker terminal, Pirate seas, Cyberpunk city or Jungle tomb
 - Copy a share link that carries the whole quiz in the URL
@@ -104,6 +105,19 @@ Answer: B
 
 The same layout also works as plain text pasted into the import dialog.
 
+## Photos and handwriting
+
+Drop or select one or more photos of a question paper, or use "Take a photo" on a phone. Several photos are read in order as one paper. Write the questions in the same layout as a PDF: a number before each question and a letter before each option.
+
+- JPG, PNG, WebP and iPhone HEIC photos work. HEIC is decoded with [heic-to](https://github.com/hoppergee/heic-to) (libheif), because only Safari opens it natively.
+- Each photo is cleaned up first: shadows and uneven light are evened out against the paper's own brightness, and the contrast is stretched.
+- Printed text is read with Tesseract. When Tesseract is unsure (as it is with handwriting), the page is straightened, ruled notebook lines are taken out, and it is cut into lines. Each line is read by [TrOCR](https://huggingface.co/Xenova/trocr-small-handwritten), a model trained on handwriting from hundreds of writers, neat and messy, run in the browser with [Transformers.js](https://huggingface.co/docs/transformers.js).
+- The handwriting model downloads once (about 65 MB) and is then kept by the browser.
+- Misread labels are put back from the order of the paper: "U 5" after options A and B becomes "C. 5", and "z. Which..." where question 2 is due becomes "2. Which...".
+- "Writing in photos and scans" in the import dialog can force printed or handwritten reading. Changing it reads the last photos or PDF again.
+- No reader gets every scrawl right. The text read from the photo is shown in the dialog to correct before importing.
+- Photos are read on the device and are not uploaded. Scanned PDF pages go through the same reader, so handwritten scans work too.
+
 ## Put it on GitHub Pages
 
 Push these files to a repository, then in the repository open Settings, Pages, and choose "Deploy from a branch" with the `main` branch and the `/ (root)` folder.
@@ -128,5 +142,6 @@ Push these files to a repository, then in the repository open Settings, Pages, a
 | `js/fx.js` | Particle bursts |
 | `js/csv.js` | CSV parsing, validation and export |
 | `js/pdf.js` | Reading text out of a PDF, with OCR for scanned pages |
+| `js/ocr.js` | Opening photos (including HEIC), cleaning them up, and reading printed text and handwriting |
 | `js/paper.js` | Turning question-paper text into questions |
 | `js/store.js` | Saving, loading and share links |

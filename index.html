@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quiz Reactor</title>
-  <meta name="description" content="Make multiple-choice quizzes by hand, from a CSV file or from a PDF question paper, then play them as a timed quiz, a themed battle or flashcards.">
+  <meta name="description" content="Make multiple-choice quizzes by hand, from a CSV file, a PDF question paper or a photo of printed or handwritten questions, then play them as a timed quiz, a themed battle or flashcards.">
   <meta name="theme-color" content="#020503">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23020503'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%2300ff41' stroke-width='2.5'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23d4ff3a'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -45,10 +45,23 @@
       <h2 id="imp-title">Import questions</h2>
 
       <label class="drop" id="imp-drop">
-        <input type="file" id="imp-file" accept=".csv,.tsv,.txt,.pdf,text/csv,text/plain,application/pdf">
-        <strong>Drop a CSV or PDF file here</strong>
-        <span>or select one from your device</span>
+        <input type="file" id="imp-file" multiple accept=".csv,.tsv,.txt,.pdf,text/csv,text/plain,application/pdf,image/*,.heic,.heif">
+        <strong>Drop a CSV, PDF or photo here</strong>
+        <span>or select files from your device. Several photos are read as one paper.</span>
       </label>
+
+      <div class="photo-row">
+        <button class="btn ghost" type="button" id="imp-camera">Take a photo</button>
+        <input type="file" id="imp-camera-file" accept="image/*" capture="environment" hidden>
+        <label class="writing">
+          <span>Writing in photos and scans</span>
+          <select id="imp-writing">
+            <option value="auto">Detect it</option>
+            <option value="print">Printed</option>
+            <option value="hand">Handwritten</option>
+          </select>
+        </label>
+      </div>
 
       <details class="help">
         <summary>How to lay out a CSV file</summary>
@@ -67,6 +80,12 @@ B. 4
 C. 5
 Answer: B</pre>
         <p class="small">An answer line under each question, or an answer key at the end, is picked up. If the PDF has no answers, you mark them in the editor after importing. Scanned pages are read with OCR, which is slower and can misread letters. The PDF is read on your device and is not uploaded.</p>
+      </details>
+
+      <details class="help">
+        <summary>Photos and handwriting</summary>
+        <p>Photograph the paper flat and in good light, filling the frame. JPG, PNG and iPhone HEIC photos all work. Write the questions the same way as in a PDF: a number before each question and a letter before each option.</p>
+        <p class="small">Printed text is read straight away. Handwriting, neat or messy, is read line by line with a handwriting model that downloads once (about 65 MB) and then stays in your browser. Pick "Handwritten" if the page is handwritten but comes out as nonsense. Every photo is read on your device and is not uploaded. Check the text it reads before importing: no reader gets every scrawl right.</p>
       </details>
 
       <label class="field">

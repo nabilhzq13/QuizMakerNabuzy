@@ -2,6 +2,7 @@ import { initBackground } from './shader.js';
 import { parseCSV, rowsToQuestions, toCSV, SAMPLE_CSV } from './csv.js';
 import { parsePaper } from './paper.js';
 import { readPdf } from './pdf.js';
+import { readPhotos, isImage } from './ocr.js';
 import * as store from './store.js';
 import { sfx } from './sfx.js';
 import { fx } from './fx.js';
@@ -18,6 +19,11 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)');
 
 const app = $('#app');
 const bg = initBackground($('#bg'));
+const phone = matchMedia('(max-width: 760px)');
+
+// the top bar's height, for layouts that fill the rest of the screen (a battle)
+const topbar = $('.topbar');
+new ResizeObserver(() => document.documentElement.style.setProperty('--top', topbar.offsetHeight + 'px')).observe(topbar);
 let quizzes = store.load();
 
 /** Everything outside the stylesheet that follows the theme: background scene, song, particle colours. */
@@ -168,10 +174,10 @@ function viewHome() {
     <section class="hero">
       <div class="hero-copy">
         <h1 class="glitch boot" data-text="Quiz&#10;Reactor"><span>Quiz</span><span>Reactor</span></h1>
-        <p class="lede">Write multiple-choice questions by hand, or import them from a CSV file or a PDF question paper. Then play them as a timed quiz, a battle or flashcards.</p>
+        <p class="lede">Write multiple-choice questions by hand, or import them from a CSV file, a PDF question paper or a photo of the page, printed or handwritten. Then play them as a timed quiz, a battle or flashcards.</p>
         <div class="row">
           <button class="btn big" data-act="new">New quiz</button>
-          <button class="btn ghost big" data-act="import">Import CSV or PDF</button>
+          <button class="btn ghost big" data-act="import">Import a file or photo</button>
         </div>
       </div>
       <div class="reactor-slot" aria-hidden="true"></div>
@@ -184,7 +190,7 @@ function viewHome() {
       <h2>Your quizzes</h2>
       ${list.length
         ? `<ul class="cards">${list.map(cardHTML).join('')}</ul>`
-        : '<p class="empty">No quizzes yet. Start a new quiz or import a CSV or PDF file.</p>'}
+        : '<p class="empty">No quizzes yet. Start a new quiz, or import a CSV file, a PDF or a photo.</p>'}
     </section>`;
   freshId = null;
   bg.setMode('home', $('.reactor-slot'));
@@ -482,6 +488,10 @@ function viewPlay(id, mode) {
     els.play.prepend(arena.el);
     arena.setWindow($('.battle-window'));
   }
+  // the verdict rises as a sheet from the bottom in battles and on phones, so there is no scrolling to it
+  const setSheet = () => els.play.classList.toggle('sheet', battle || phone.matches);
+  setSheet();
+  phone.addEventListener('change', setSheet);
   bg.setMode('play', battle ? null : $('.reactor-slot'));
   music.setBattle(battle);
 
@@ -510,6 +520,8 @@ function viewPlay(id, mode) {
       <button class="answer cut tilt" style="--i:${j}" data-act="answer" data-j="${j}">
         <kbd>${LETTERS[j]}</kbd><span>${esc(o.t)}</span>
       </button>`).join('');
+    // long answers get a row each, even where answers normally sit two by two
+    els.answers.classList.toggle('long', q.opts.some(o => o.t.length > 34));
     els.after.innerHTML = '';
     els.segs[S.i].className = 'now';
     els.qwrap.classList.remove('in');
@@ -615,7 +627,8 @@ function viewPlay(id, mode) {
       <button class="btn" data-act="next">${last ? 'See results' : 'Next question'}</button>`;
     const nextBtn = $('button', els.after);
     nextBtn.focus({ preventScroll: true });
-    nextBtn.scrollIntoView({ block: 'nearest', behavior: calm.matches ? 'auto' : 'smooth' });
+    // the sheet is always on screen; only the inline verdict (desktop quiz) needs scrolling to
+    if (!els.play.classList.contains('sheet')) nextBtn.scrollIntoView({ block: 'nearest', behavior: calm.matches ? 'auto' : 'smooth' });
   }
 
   let rollRaf = 0;
@@ -758,6 +771,7 @@ function viewPlay(id, mode) {
     cancelAnimationFrame(rollRaf);
     timers.forEach(clearTimeout);
     removeEventListener('keydown', onKey);
+    phone.removeEventListener('change', setSheet);
     arena?.destroy();
     music.setBattle(false);
   };
@@ -939,15 +953,18 @@ async function viewShared(code) {
   }
 }
 
-// ---------- import dialog (CSV file, PDF question paper or pasted text) ----------
+// ---------- import dialog (CSV file, PDF question paper, photos or pasted text) ----------
 
 const imp = {
   dlg: $('#imp'), drop: $('#imp-drop'), file: $('#imp-file'), text: $('#imp-text'), textLabel: $('#imp-text-label'),
   report: $('#imp-report'), name: $('#imp-name'), nameField: $('#imp-title-field'),
-  ok: $('#imp-ok'), title: $('#imp-title'),
+  ok: $('#imp-ok'), title: $('#imp-title'), camera: $('#imp-camera-file'), writing: $('#imp-writing'),
   ctx: null, found: [], unanswered: 0,
-  pdf: null, // { pages, total, ocrPages } while the text box holds text read from a PDF
-  job: 0,    // goes up whenever a new file is read or the dialog closes, so stale reads are dropped
+  // while the text box holds text read from a file: { kind: 'pdf', pages, total, ocrPages, handPages }
+  // or { kind: 'photo', photos, handPhotos }
+  pdf: null,
+  files: null, // the last PDF or photos read, so they can be read again as print or handwriting
+  job: 0,      // goes up whenever a new file is read or the dialog closes, so stale reads are dropped
 };
 
 const PASTE_LABEL = 'Or paste CSV text, or the questions as plain text';
@@ -956,9 +973,28 @@ const PDF_ERRORS = {
   ocr: 'This PDF is a scan, and the OCR engine could not be loaded. Check your internet connection and try again.',
   locked: 'This PDF is password protected. Save a copy without the password and import that.',
   broken: 'This file could not be read as a PDF.',
+  hand: 'Could not load the handwriting reader. Check your internet connection and try again. It downloads once, about 65 MB.',
 };
+const PHOTO_ERRORS = {
+  heic: 'Could not load the reader for iPhone HEIC photos. Check your internet connection and try again.',
+  image: 'This photo could not be opened. Try saving it as a JPG and importing that.',
+  ocr: 'Could not load the text reader. Check your internet connection and try again.',
+  hand: PDF_ERRORS.hand,
+};
+const MB = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0);
+
+/** What the OCR is doing right now, in words. */
+function ocrStatus(s, where) {
+  if (s.stage === 'download') {
+    return `Downloading the handwriting reader: ${MB(s.done)} of ${MB(s.total)} MB. This happens only once.`;
+  }
+  if (s.stage === 'hand') return `${where}: reading handwriting, line ${Math.min(s.done + 1, s.total)} of ${s.total}`;
+  if (s.stage === 'open') return `${where}: opening it`;
+  return `${where}: reading the text`;
+}
 
 const isPdf = file => file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+const listNums = (list, one, many) => list.length === 1 ? `${one} ${list[0]}` : `${many} ${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
 const titleFrom = name => name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim().slice(0, 120);
 const listPages = p => p.length === 1 ? `Page ${p[0]} was a scan` : `Pages ${p.slice(0, -1).join(', ')} and ${p[p.length - 1]} were scans`;
 
@@ -982,8 +1018,10 @@ function openImport(ctx, file) {
   imp.found = [];
   imp.unanswered = 0;
   imp.pdf = null;
+  imp.files = null;
   imp.text.value = '';
   imp.file.value = '';
+  imp.camera.value = '';
   imp.name.value = '';
   imp.textLabel.textContent = PASTE_LABEL;
   setReport('', '');
@@ -992,13 +1030,23 @@ function openImport(ctx, file) {
   imp.nameField.hidden = adding;
   paintOk();
   if (!imp.dlg.open) imp.dlg.showModal();
-  if (file) readImportFile(file);
+  if (file) readImportFiles(Array.isArray(file) ? file : [file]);
+}
+
+/** Photos are read together as one paper; anything else is read one file at a time. */
+function readImportFiles(files) {
+  files = files.filter(Boolean);
+  if (!files.length) return;
+  const photos = files.filter(isImage);
+  if (photos.length === files.length) return readPhotoFiles(photos, ++imp.job);
+  readImportFile(files.find(f => !isImage(f)));
 }
 
 async function readImportFile(file) {
   if (!file) return;
   const job = ++imp.job;
   imp.pdf = null;
+  imp.files = null;
   imp.textLabel.textContent = PASTE_LABEL;
   if (isPdf(file)) return readPdfFile(file, job);
 
@@ -1015,19 +1063,23 @@ async function readPdfFile(file, job) {
   imp.found = [];
   imp.text.value = '';
   paintOk();
+  imp.files = [file];
   setReport('busy', 'Opening the PDF');
   try {
     const res = await readPdf(file, {
+      mode: imp.writing.value,
       isCancelled: () => job !== imp.job,
       onProgress: p => {
         if (job !== imp.job) return;
-        setReport('busy', p.ocr
-          ? `Page ${p.page} of ${p.pages} is a scan. Reading it with OCR, which can take a minute.`
-          : `Reading page ${p.page} of ${p.pages}`);
+        setReport('busy', !p.ocr
+          ? `Reading page ${p.page} of ${p.pages}`
+          : p.stage
+            ? ocrStatus(p, `Page ${p.page} of ${p.pages}, a scan`)
+            : `Page ${p.page} of ${p.pages} is a scan. Reading it with OCR, which can take a minute.`);
       },
     });
     if (!res || job !== imp.job) return;
-    imp.pdf = { pages: res.pages, total: res.total, ocrPages: res.ocrPages };
+    imp.pdf = { kind: 'pdf', pages: res.pages, total: res.total, ocrPages: res.ocrPages, handPages: res.handPages };
     imp.text.value = res.text;
     imp.textLabel.textContent = 'Text read from the PDF. Fix any mistakes here and it is checked again.';
     if (!imp.name.value) imp.name.value = titleFrom(file.name);
@@ -1039,6 +1091,38 @@ async function readPdfFile(file, job) {
   }
 }
 
+async function readPhotoFiles(files, job) {
+  const big = files.find(f => f.size > 30 * 1024 * 1024);
+  if (big) return setReport('fail', `${esc(big.name)} is larger than 30 MB. Use a smaller photo.`);
+  imp.pdf = null;
+  imp.files = files;
+  imp.found = [];
+  imp.text.value = '';
+  imp.textLabel.textContent = PASTE_LABEL;
+  paintOk();
+  const n = files.length;
+  setReport('busy', n === 1 ? 'Opening the photo' : `Opening ${n} photos`);
+  try {
+    const res = await readPhotos(files, {
+      mode: imp.writing.value,
+      isCancelled: () => job !== imp.job,
+      onProgress: p => {
+        if (job === imp.job) setReport('busy', ocrStatus(p, n === 1 ? 'The photo' : `Photo ${p.photo} of ${p.photos}`));
+      },
+    });
+    if (!res || job !== imp.job) return;
+    imp.pdf = { kind: 'photo', photos: res.photos, handPhotos: res.handPhotos };
+    imp.text.value = res.text;
+    imp.textLabel.textContent = `Text read from the ${n === 1 ? 'photo' : 'photos'}. Fix any mistakes here and it is checked again.`;
+    if (!imp.name.value) imp.name.value = n === 1 ? titleFrom(files[0].name) : 'Imported photos';
+    analyze();
+  } catch (err) {
+    if (job !== imp.job) return;
+    console.error(err);
+    setReport('fail', PHOTO_ERRORS[err?.code] || PHOTO_ERRORS.image);
+  }
+}
+
 function analyze() {
   const src = imp.text.value;
   if (!src.trim()) {
@@ -1047,7 +1131,10 @@ function analyze() {
     imp.unanswered = 0;
     imp.pdf = null;
     imp.textLabel.textContent = PASTE_LABEL;
-    setReport(wasPdf ? 'fail' : '', wasPdf ? '<strong>No text found in this PDF.</strong> The pages may be blank or too faint to read.' : '');
+    setReport(wasPdf ? 'fail' : '', !wasPdf ? ''
+      : wasPdf.kind === 'photo'
+        ? '<strong>No text found in the photo.</strong> Take it again closer to the page, flat and in good light.'
+        : '<strong>No text found in this PDF.</strong> The pages may be blank or too faint to read.');
     paintOk();
     return;
   }
@@ -1072,7 +1159,10 @@ function analyze() {
     const n = questions.length;
     imp.found = questions;
     imp.unanswered = unanswered;
-    const ocr = imp.pdf?.ocrPages || [];
+    const scan = imp.pdf;
+    const ocr = scan?.kind === 'pdf' ? scan.ocrPages : [];
+    const hand = (scan?.kind === 'pdf' ? scan.handPages : scan?.handPhotos) || [];
+    const printed = scan?.kind === 'pdf' ? ocr.filter(p => !hand.includes(p)) : [];
     let html = n
       ? `<strong>${plural(n, 'question')} found.</strong>`
       : '<strong>No questions found.</strong> The text needs numbered questions with options labelled A, B, C.' + (imp.pdf ? ' You can fix the text above and it is checked again.' : '');
@@ -1081,14 +1171,29 @@ function analyze() {
         ' You mark the correct answers in the editor after importing.';
     }
     if (notes.length) html += ` ${plural(notes.length, 'question')} skipped:<ul>${notes.slice(0, 5).map(e => `<li>Question ${e.n}: ${esc(e.msg)}</li>`).join('')}${more(notes, 'questions')}</ul>`;
-    if (ocr.length) html += `<p>${listPages(ocr)} read with OCR, which can misread letters. Check the text above.</p>`;
-    if (imp.pdf && imp.pdf.total > imp.pdf.pages) html += `<p>Only the first ${imp.pdf.pages} of ${imp.pdf.total} pages were read.</p>`;
-    setReport(n === 0 ? 'fail' : notes.length || unanswered || ocr.length ? 'warn' : '', html);
+    if (printed.length) html += `<p>${listPages(printed)} read with OCR, which can misread letters. Check the text above.</p>`;
+    if (hand.length) {
+      const where = scan.kind === 'pdf' ? listNums(hand, 'Page', 'Pages') : scan.photos === 1 ? 'The photo' : listNums(hand, 'Photo', 'Photos');
+      html += `<p>${where} ${hand.length === 1 || where === 'The photo' ? 'was' : 'were'} read as handwriting. Check the text above, especially the question numbers and option letters.</p>`;
+    } else if (scan?.kind === 'photo') {
+      html += '<p>Read as printed text. If the page is handwritten, choose Handwritten above to read it again.</p>';
+    }
+    if (scan?.kind === 'pdf' && scan.total > scan.pages) html += `<p>Only the first ${scan.pages} of ${scan.total} pages were read.</p>`;
+    setReport(n === 0 ? 'fail' : notes.length || unanswered || ocr.length || scan?.kind === 'photo' ? 'warn' : '', html);
   }
   paintOk();
 }
 
-imp.file.addEventListener('change', () => readImportFile(imp.file.files[0]));
+imp.file.addEventListener('change', () => readImportFiles([...imp.file.files]));
+imp.camera.addEventListener('change', () => readImportFiles([...imp.camera.files]));
+$('#imp-camera').addEventListener('click', () => imp.camera.click());
+// choosing how the writing is read reads the last PDF or photos again that way
+imp.writing.addEventListener('change', () => {
+  const files = imp.files;
+  if (!files) return;
+  if (files.every(isImage)) readPhotoFiles(files, ++imp.job);
+  else readImportFile(files[0]);
+});
 imp.text.addEventListener('input', analyze);
 $('#imp-cancel').addEventListener('click', () => imp.dlg.close());
 $('#imp-template').addEventListener('click', () => download('quiz-template.csv', SAMPLE_CSV));
@@ -1144,13 +1249,13 @@ addEventListener('drop', e => {
   dragDepth = 0;
   document.body.classList.remove('dragging');
   imp.drop.classList.remove('over');
-  const file = e.dataTransfer.files[0];
-  if (!file) return;
-  if (imp.dlg.open) return readImportFile(file);
+  const files = [...e.dataTransfer.files];
+  if (!files.length) return;
+  if (imp.dlg.open) return readImportFiles(files);
   const view = document.body.dataset.view;
   if (view === 'play') return;
   const editing = view === 'edit' && find(location.hash.split('/')[2]);
-  openImport(editing ? { mode: 'append', quiz: editing } : { mode: 'new' }, file);
+  openImport(editing ? { mode: 'append', quiz: editing } : { mode: 'new' }, files);
 });
 
 // ---------- theme picker, music and sound toggles, card tilt ----------
