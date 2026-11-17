@@ -18,7 +18,7 @@ import { sfx } from './sfx.js';
 import { ease, Spring } from './stage3d.js';
 import {
   rad, rand, seeded, away, impactFeel, Rig, READY, BRACE, CHEER, throwBeat,
-  buildShip, THEIR_SHIP, discModel, buildRunner, MY_RUNNER, THEIR_RUNNER,
+  buildShip, THEIR_SHIP, discModel, buildRunner, MY_RUNNER, THEIR_RUNNER, part, lightLine, along, ringAt,
   spearModel, buildGorilla, APE_READY, APE_GRAB, APE_WIND, APE_THROW, APE_BEAT, APE_COWER,
 } from './models3d.js';
 
@@ -73,6 +73,34 @@ function armModel(S, { arm, hand }) {
   fore.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), elbow.clone().normalize());
   S.add(g, new T.SphereGeometry(0.068, 12, 8), hand, null, null, [1.1, 0.9, 1]);
   return { g, elbow, turn: fore.quaternion.clone() };
+}
+
+/**
+ * Your own forearm in runner armour: a sculpted gauntlet from the wrist (the
+ * group's origin) back past the bottom right of the view, with light lines
+ * along it, a lit cuff and a gloved hand. Same layout as armModel.
+ */
+function suitArm(S, c) {
+  const T = S.T;
+  const g = new T.Group();
+  const elbow = new T.Vector3(0.3, -0.34, 0.5);
+  const shell = S.armor(c.suit, { rim: c.glow, rimStrength: 0.35, gloss: 130, reflect: 1.2 });
+  const weave = S.armor(c.soft, { rim: c.glow, rimStrength: 0.25, gloss: 40, reflect: 0.45, spec: 0.5, mesh: true });
+  const neon = S.light(c.glow, { power: 1.75 });
+  // the forearm runs along its own y axis, from the wrist (y 0) towards the elbow
+  const limb = S.group(g);
+  limb.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), elbow.clone().normalize());
+  const len = elbow.length() * 1.45;
+  const fore = part(S, limb, [[0.046, 0.03], [0.052, 0.08], [0.063, 0.3], [0.068, 0.55], [0.064, len * 0.85], [0.06, len]], shell, { sx: 1.0, sz: 0.88, segments: 40 });
+  for (const a of [0.35, Math.PI + 0.35, Math.PI / 2 + 0.35]) {
+    lightLine(S, limb, along(fore, [[a, 0.1], [a + 0.12, 0.35], [a, 0.6], [a - 0.1, len * 0.9]], 0.006), neon, { radius: 0.007 });
+  }
+  lightLine(S, limb, ringAt(fore, 0.1, 0.006, 32), neon, { closed: true, radius: 0.0075 });
+  lightLine(S, limb, ringAt(fore, 0.62, 0.006, 32), neon, { closed: true, radius: 0.006 });
+  // the gloved hand
+  S.add(g, new T.SphereGeometry(0.06, 28, 18), shell, null, null, [1.15, 0.85, 1.0]);
+  S.add(g, new T.CapsuleGeometry(0.03, 0.06, 6, 14), weave, [-0.04, 0.03, -0.02], [0, 0, 0.9], [1.2, 1, 1.4]);
+  return { g, elbow };
 }
 
 /** Stretch a thin unit-height mesh between two points. */
@@ -275,14 +303,20 @@ function pirate(S) {
 
 function cyber(S) {
   const T = S.T;
-  S.setLook({ fog: '#1c0a36', fogNear: 9, fogFar: 54, light: [0.25, 0.9, 0.5], lightColor: '#a79bf5', ambient: '#30265a', glow: 1.1, glowFrom: 0.6 });
+  S.setLook({
+    fog: '#1c0a36', fogNear: 9, fogFar: 54, light: [0.25, 0.9, 0.5], lightColor: '#b9b2ff', ambient: '#1e1838', glow: 1.1, glowFrom: 0.6,
+    // what the runners' glossy armour reflects: a dark sky, the lit skyline, magenta signs, the grid
+    env: { top: '#07040f', horizon: '#6a1a6e', floor: '#1a0624', accent: '#ff2bd6' },
+  });
   S.setPov({ eye: [0, 1.62, 0], target: [0, 1.1, -6.5], size: [2.1, 2.3] });
 
   S.add(S.scene, new T.PlaneGeometry(280, 100), S.sky({ top: '#06030d', bottom: '#2c0e48', haze: '#3a0c40', stars: 0.35 }), [0, 34, -72]);
   const floor = new T.PlaneGeometry(240, 150);
   floor.rotateX(-Math.PI / 2);
-  const grid = S.grid({ base: '#07030e', line: '#ff2bd6', cell: 1.6 });
-  S.add(S.scene, floor, grid, [0, 0, -52]);
+  // the floor is polished: the rival, the towers and the signs are mirrored in it
+  const notMirrored = [];
+  const grid = S.grid({ base: '#07030e', line: '#ff2bd6', cell: 1.6, mirror: S.mirror({ strength: 0.85, hide: notMirrored }) });
+  notMirrored.push(S.add(S.scene, floor, grid, [0, 0, -52]));
 
   // the city: a skyline ahead and towers down both sides of the street you stand in
   const r = seeded(7);
@@ -305,20 +339,12 @@ function cyber(S) {
   rival.root.position.set(0, 0, -6.5);
   rival.root.rotation.y = -Math.PI / 2 + 0.35; // facing you, turned a little so the throwing arm shows
   S.scene.add(rival.root);
-  const pad = S.group(S.scene, [0, 0, -6.5]);
-  S.add(pad, new T.CylinderGeometry(1, 1, 0.06, 40), S.toon('#120a22', { rim: rival.glow, rimStrength: 0.3 }), [0, 0.03, 0]);
-  S.add(pad, new T.TorusGeometry(1, 0.028, 6, 48), S.light(rival.glow, { power: 1.4 }), [0, 0.07, 0], [Math.PI / 2, 0, 0]);
+  // a lit ring on the floor where the rival stands
+  S.add(S.scene, new T.TorusGeometry(1, 0.022, 8, 64), S.light(rival.glow, { power: 1.4 }), [0, 0.02, -6.5], [Math.PI / 2, 0, 0]);
 
-  // your own arm, in the same suit, holding your disc
+  // your own arm, in the same armour as the rival's but lit cyan, holding your disc
   const glow = MY_RUNNER.glow;
-  const suit = S.toon(MY_RUNNER.suit, { rim: glow, rimStrength: 0.6 });
-  const arm = armModel(S, { arm: suit, hand: S.toon(MY_RUNNER.dark, { rim: glow, rimStrength: 0.5 }) });
-  const neon = S.light(glow, { power: 1.5 });
-  for (const k of [0.3, 0.62]) {
-    const band = S.add(arm.g, new T.TorusGeometry(0.054, 0.011, 6, 18), neon);
-    band.position.copy(arm.elbow).multiplyScalar(k);
-    band.quaternion.copy(arm.turn).multiply(new T.Quaternion().setFromEuler(new T.Euler(Math.PI / 2, 0, 0)));
-  }
+  const arm = suitArm(S, MY_RUNNER);
   const HELD = 0.5; // the disc in your hand is drawn smaller than one in flight, so it does not fill the view
   const held = discModel(S, glow, S.still);
   held.position.set(-0.05, 0.1, -0.03);

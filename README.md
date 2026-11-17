@@ -31,12 +31,14 @@ Pick a theme from the tiles on the home page or the menu in the top bar. The cho
 | --- | --- | --- | --- |
 | Hacker terminal | Green wireframe corridor | Dark, steady pulse | None, quiz and flashcards only |
 | Pirate seas | Night sea under the moon | A jig | From your deck you fire a cannon at an enemy ship while the crew join in with muskets, and she fires back |
-| Cyberpunk city | Neon skyline over a wet street | Slow synthwave | You and a rival runner throw light discs at each other on the grid |
+| Cyberpunk city | Neon skyline over a wet street | Slow synthwave | You and a rival runner in glossy light-lined armour throw light discs at each other on a mirror-polished grid |
 | Jungle tomb | Torch-lit stone passage | Hand drums, marimba and flute | You throw stone-tipped spears at the gorilla guarding the tomb door, and it throws rocks |
 
 The music is generated in the browser with WebAudio, so there are no audio files. It starts after the first click or key press, because browsers block sound before that. "Music on" and "Sound on" in the top bar turn the music and the sound effects off separately.
 
 The battles are real-time 3D and seen through your own eyes. The scene fills the whole screen behind the quiz, the enemy faces you in the gap between the health bars at the top and the question, and you see your own cannon, disc or spear in front of you. When the enemy hits you the view shakes and its edges flash red. The ships, runners, gorilla and scenery are built in code from simple shapes, so there are no model files either, and they are drawn with custom shaders: two-step toon lighting with a coloured rim, an animated sea, a neon grid, lit windows, torch flames and a glow pass. They use [three.js](https://threejs.org/), which is loaded from the jsDelivr CDN the first time a battle starts. If it cannot be loaded, the battle still runs with the health bars alone.
+
+The cyberpunk runners are sculpted rather than stacked from shapes: each limb is a profile turned around its bone, so muscles swell and taper. Their armour has its own shader, with a tight clear-coat highlight and Fresnel reflections of a procedural night city (sky, lit skyline, neon signs, the floor). Their light lines are tubes laid on the body's surface, so they follow it as it moves. The grid floor is a real mirror: each frame the scene is drawn again from below, at half resolution, and reflected in it. On computers the battle renders at up to twice the screen's pixel density; phones stay at 1.5 to keep it smooth.
 
 The motion follows common game-feel practice:
 
@@ -135,7 +137,7 @@ Push these files to a repository, then in the repository open Settings, Pages, a
 | `js/stage3d.js` | The 3D stage: renderer, first-person camera, shaders, post pass, particles, trails, springs, hit-stop and camera shake |
 | `js/glsl-lib.js` | GLSL hashes, noise, fBm, water waves and vignette, bundled from shader-skills |
 | `js/pov3d.js` | The three fights in first person: scenery, what you hold, both sides' attacks and the endings |
-| `js/models3d.js` | The ships, runner and gorilla as 3D models, and how they move |
+| `js/models3d.js` | The ships, the sculpted runners and the gorilla as 3D models, and how they move |
 | `js/music.js` | The four songs and the synth that plays them |
 | `js/sfx.js` | Sound effects made with WebAudio |
 | `js/audio.js` | The audio context shared by music and sound effects |

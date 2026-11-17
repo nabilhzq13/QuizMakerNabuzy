@@ -217,6 +217,89 @@ void main(){
 }
 `;
 
+// Glossy armour: a dark, polished shell that reads by what it reflects. Soft
+// wrapped diffuse, a tight clear-coat highlight plus a broad sheen, Fresnel
+// reflections of a procedural night city (sky, a bright horizon band, neon
+// towers, the glowing floor) and a coloured rim. MESH adds a perforated weave
+// for the soft parts of a suit.
+const ARMOR_VERT = `
+varying vec3 vW, vNW, vL, vNL;
+void main(){
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz;
+  vNW = normalize(mat3(modelMatrix) * normal);
+  vL = position;
+  vNL = normal;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}
+`;
+
+const ARMOR_FRAG = `
+uniform vec3 uColor, uRim, uLightDir, uLightColor, uAmbient;
+uniform vec3 uEnvTop, uEnvHorizon, uEnvFloor, uEnvAccent;
+uniform float uRimStrength, uGloss, uSpec, uReflect, uFlash, uFade, uDissolve, uTime;
+varying vec3 vW, vNW, vL, vNL;
+${GLSL_LIB}
+${FOG}
+
+// the night city as a mirror sees it, in any direction r (world space, unit length)
+vec3 cityEnv(vec3 r){
+  float y = r.y;
+  vec3 col = mix(uEnvHorizon * 0.35, uEnvTop, smoothstep(0.02, 0.75, y));
+  col += uEnvHorizon * exp(-abs(y - 0.03) * 16.0) * 1.3;           // the lit skyline along the horizon
+  float ang = atan(r.z, r.x + 1e-5);
+  float towers = smoothstep(0.82, 1.0, sin(ang * 11.0 + 1.3) * 0.5 + 0.5)
+               * smoothstep(0.42, 0.0, y) * step(-0.02, y);           // tall neon signs standing on it
+  col += uEnvAccent * towers * 1.1;
+  col += vec3(1.0) * pow(max(dot(r, normalize(vec3(-0.3, 0.55, 0.78))), 0.0), 400.0) * 3.0; // one bright light behind you
+  return mix(col, uEnvFloor, smoothstep(0.0, -0.12, y));             // the floor below
+}
+
+void main(){
+  if (uDissolve > 0.0) {
+    float line = 2.25 - uDissolve * 2.6 + (hash13(vW * 22.0) - 0.5) * 0.18;
+    if (vW.y > line) discard;
+  }
+  vec3 N = normalize(vNW);
+  vec3 V = normalize(cameraPosition - vW);
+  if (!gl_FrontFacing) N = -N;
+  vec3 L = normalize(uLightDir);
+  float nv = max(dot(N, V), 0.0);
+
+  vec3 base = uColor;
+  float reflectMul = 1.0;
+  #ifdef MESH
+    // a woven, perforated panel: dark holes on a hex-ish grid, laid on the part's own surface
+    vec3 an = abs(normalize(vNL));
+    vec2 q = (an.y > 0.7 ? vL.xz : (an.x > an.z ? vL.zy : vL.xy)) * 95.0;
+    q.x += 0.5 * mod(floor(q.y), 2.0);
+    float hole = smoothstep(0.34, 0.22, length(fract(q) - 0.5));
+    base *= 1.0 - 0.7 * hole;
+    reflectMul = 1.0 - 0.8 * hole;
+  #endif
+
+  // soft wrapped diffuse: armour doesn't go pitch black past the terminator
+  float diff = clamp((dot(N, L) + 0.35) / 1.35, 0.0, 1.0);
+  vec3 col = base * (uAmbient + uLightColor * diff);
+
+  // a tight clear-coat highlight, a broad sheen, and a highlight from the viewer's side
+  vec3 H = normalize(L + V);
+  float nh = max(dot(N, H), 0.0);
+  float spec = pow(nh, uGloss) * (uGloss + 8.0) / 60.0 + pow(nh, 12.0) * 0.08;
+  float front = pow(max(dot(N, normalize(V + vec3(0.0, 0.7, 0.0))), 0.0), uGloss * 0.5) * 0.18;
+  col += uLightColor * (spec + front) * uSpec * reflectMul;
+
+  // reflections: weak face on, strong at grazing angles (Schlick Fresnel)
+  float fres = 0.05 + 0.95 * pow(1.0 - nv, 5.0);
+  col += cityEnv(reflect(-V, N)) * fres * uReflect * reflectMul;
+
+  // the coloured edge that lifts a dark figure off a dark scene
+  col += uRim * pow(1.0 - nv, 3.0) * uRimStrength;
+  col = mix(col, vec3(1.0, 0.97, 0.9), uFlash);
+  gl_FragColor = vec4(fogged(col, length(cameraPosition - vW)) * uFade, 1.0);
+}
+`;
+
 // flat, unlit colour for anything that gives off light: neon strips, lamps, glyphs
 const GLOW_VERT = `
 varying vec3 vW;
@@ -313,6 +396,11 @@ const GRID_FRAG = `
 uniform vec3 uBase, uLine;
 uniform float uCell, uTime, uPulse;
 uniform vec3 uPulseAt;
+#ifdef MIRROR
+uniform sampler2D uMirror;
+uniform mat4 uMirrorMatrix;
+uniform float uMirrorStrength;
+#endif
 varying vec3 vW;
 ${GLSL_LIB}
 ${FOG}
@@ -324,6 +412,21 @@ void main(){
   float r = distance(vW.xz, uPulseAt.xz);
   float ring = uPulse * exp(-abs(r - (1.0 - uPulse) * 9.0) * 1.6);
   vec3 col = uBase + uLine * line * (1.2 + ring * 2.5) + uLine * 0.07 * valueNoise(vW.xz * 0.5);
+  #ifdef MIRROR
+    // a polished floor: the scene mirrored in it, rippled a touch and softened with distance,
+    // stronger at grazing angles; the grid lines sit on top
+    float dist = distance(cameraPosition, vW);
+    vec3 V = normalize(cameraPosition - vW);
+    float fres = 0.3 + 0.7 * pow(1.0 - max(V.y, 0.0), 4.0);
+    vec2 wobble = (vec2(valueNoise(vW.xz * 2.2), valueNoise(vW.xz * 2.2 + 17.0)) - 0.5) * 0.012;
+    vec4 tc = uMirrorMatrix * vec4(vW, 1.0);
+    vec2 uv = tc.xy / tc.w + wobble;
+    float blur = 0.0015 + dist * 0.00035;
+    vec3 refl = texture2D(uMirror, uv).rgb * 0.36
+              + (texture2D(uMirror, uv + vec2(blur, 0.0)).rgb + texture2D(uMirror, uv - vec2(blur, 0.0)).rgb
+              +  texture2D(uMirror, uv + vec2(0.0, blur)).rgb + texture2D(uMirror, uv - vec2(0.0, blur)).rgb) * 0.16;
+    col += refl * fres * uMirrorStrength * (1.0 - line * 0.6);
+  #endif
   gl_FragColor = vec4(fogged(col, distance(cameraPosition, vW)), 1.0);
 }
 `;
@@ -758,7 +861,13 @@ export class Stage {
       uFogFar: { value: 60 },
       uPointPos: { value: new T.Vector3(0, 100, 0) },
       uPointColor: { value: new T.Color('#000000') },
+      // what glossy armour reflects (see setLook's env)
+      uEnvTop: { value: new T.Color('#05040a') },
+      uEnvHorizon: { value: new T.Color('#30204a') },
+      uEnvFloor: { value: new T.Color('#06030c') },
+      uEnvAccent: { value: new T.Color('#ff2bd6') },
     };
+    this.preRender = new Set(); // extra passes drawn before each frame, such as a mirror
     this.still = this.fx(); // for scenery, which never flashes or fades
 
     this.particles = new Particles();
@@ -773,8 +882,14 @@ export class Stage {
   }
 
   /** Light, fog and glow for a scene. */
-  setLook({ fog, fogNear, fogFar, light, lightColor, ambient, lamp, lampColor, glow = 0.8, glowFrom = 0.7 }) {
+  setLook({ fog, fogNear, fogFar, light, lightColor, ambient, lamp, lampColor, glow = 0.8, glowFrom = 0.7, env }) {
     const s = this.shared;
+    if (env) {
+      s.uEnvTop.value.set(env.top);
+      s.uEnvHorizon.value.set(env.horizon);
+      s.uEnvFloor.value.set(env.floor);
+      s.uEnvAccent.value.set(env.accent);
+    }
     s.uFogColor.value.set(fog);
     s.uFogNear.value = fogNear;
     s.uFogFar.value = fogFar;
@@ -832,8 +947,10 @@ export class Stage {
     const snap = w !== this.size?.[0] || h !== this.size?.[1];
     if (snap) {
       this.size = [w, h];
-      // full screen is a lot of pixels: cap the sharpness so phones and big monitors stay smooth
-      const dpr = this.dpr = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2.4e6 / (w * h)));
+      // full screen is a lot of pixels: phones get up to 1.5 pixels per CSS pixel, computers up to 2,
+      // within a pixel budget so big monitors stay smooth
+      const touch = matchMedia('(pointer: coarse)').matches;
+      const dpr = this.dpr = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2, Math.sqrt((touch ? 2.4e6 : 4.2e6) / (w * h)));
       this.renderer.setPixelRatio(dpr);
       this.renderer.setSize(w, h, false);
       this.post?.setSize(Math.round(w * dpr), Math.round(h * dpr));
@@ -916,6 +1033,7 @@ export class Stage {
     this.updateCamera(real);
     for (const task of [...this.tasks]) task(dt, this.time);
     this.particles.update(dt);
+    for (const pass of this.preRender) pass();
     if (this.post) this.post.render(this.scene, this.camera, this.split.y, this.exposure.y, this.hurtLevel.y);
     else this.renderer.render(this.scene, this.camera);
   }
@@ -1031,6 +1149,84 @@ export class Stage {
     });
   }
 
+  /**
+   * Glossy armour (see ARMOR_FRAG). gloss is the highlight's tightness, spec its
+   * strength, reflect how much of the city it mirrors; mesh gives it a perforated weave.
+   */
+  armor(color, { fx = this.still, rim = '#ffffff', rimStrength = 0.3, gloss = 110, spec = 1, reflect = 1, mesh = false } = {}) {
+    return new T.ShaderMaterial({
+      defines: mesh ? { MESH: '' } : {},
+      vertexShader: ARMOR_VERT, fragmentShader: ARMOR_FRAG, side: T.DoubleSide,
+      uniforms: {
+        ...this.shared, ...fx,
+        uColor: { value: new T.Color(color) },
+        uRim: { value: new T.Color(rim) },
+        uRimStrength: { value: rimStrength },
+        uGloss: { value: gloss },
+        uSpec: { value: spec },
+        uReflect: { value: reflect },
+      },
+    });
+  }
+
+  /**
+   * A mirror-like floor at height y: each frame the scene is drawn again from
+   * below, at half resolution, and the floor shader looks it up. Pass `hide`
+   * for things that shouldn't appear in it (the floor itself).
+   * Returns the uniforms to give grid({ mirror }).
+   */
+  mirror({ y = 0, strength = 0.55, hide = [] } = {}) {
+    const target = new T.WebGLRenderTarget(1, 1, { depthBuffer: true });
+    const eye = new T.PerspectiveCamera();
+    const plane = new T.Plane();
+    const clip = new T.Vector4();
+    const q = new T.Vector4();
+    const view = new T.Vector3();
+    const bias = new T.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+    const uniforms = { uMirror: { value: target.texture }, uMirrorMatrix: { value: new T.Matrix4() }, uMirrorStrength: { value: strength } };
+    this.preRender.add(() => {
+      const cam = this.camera;
+      const w = Math.max(1, Math.round(this.size[0] * this.dpr * 0.5));
+      const h = Math.max(1, Math.round(this.size[1] * this.dpr * 0.5));
+      if (target.width !== w || target.height !== h) target.setSize(w, h);
+      cam.updateMatrixWorld();
+      // the camera mirrored in the floor, looking at the mirrored point it looks at
+      const pos = cam.getWorldPosition(new T.Vector3());
+      const dir = cam.getWorldDirection(new T.Vector3());
+      const up = new T.Vector3(0, 1, 0).applyQuaternion(cam.getWorldQuaternion(new T.Quaternion()));
+      eye.position.set(pos.x, 2 * y - pos.y, pos.z);
+      view.copy(pos).add(dir);
+      eye.up.set(up.x, -up.y, up.z);
+      eye.lookAt(view.x, 2 * y - view.y, view.z);
+      eye.fov = cam.fov;
+      eye.aspect = cam.aspect;
+      eye.near = cam.near;
+      eye.far = cam.far;
+      eye.updateMatrixWorld();
+      eye.updateProjectionMatrix();
+      uniforms.uMirrorMatrix.value.copy(bias).multiply(eye.projectionMatrix).multiply(eye.matrixWorldInverse);
+      // clip everything below the floor with an oblique near plane (Lengyel), so it never shows in the mirror
+      plane.setFromNormalAndCoplanarPoint(new T.Vector3(0, 1, 0), new T.Vector3(0, y, 0)).applyMatrix4(eye.matrixWorldInverse);
+      clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+      const e = eye.projectionMatrix.elements;
+      q.set((Math.sign(clip.x) + e[8]) / e[0], (Math.sign(clip.y) + e[9]) / e[5], -1, (1 + e[10]) / e[14]);
+      clip.multiplyScalar(2 / clip.dot(q));
+      e[2] = clip.x; e[6] = clip.y; e[10] = clip.z + 1 - 0.003; e[14] = clip.w;
+
+      const hidden = [this.hands, ...hide].filter(o => o.visible);
+      hidden.forEach(o => { o.visible = false; });
+      const r = this.renderer;
+      const before = r.getRenderTarget();
+      r.setRenderTarget(target);
+      r.clear();
+      r.render(this.scene, eye);
+      r.setRenderTarget(before);
+      hidden.forEach(o => { o.visible = true; });
+    });
+    this.mirrorTarget = target;
+    return uniforms;
+  }
+
   /** Unlit colour for things that give off light. power above 1 makes it glow harder. */
   light(color, { fx = this.still, power = 1.3, opacity = 1, additive = false } = {}) {
     return new T.ShaderMaterial({
@@ -1060,11 +1256,12 @@ export class Stage {
     });
   }
 
-  grid({ base, line, cell = 1.6 }) {
+  grid({ base, line, cell = 1.6, mirror = null }) {
     const m = new T.ShaderMaterial({
+      defines: mirror ? { MIRROR: '' } : {},
       vertexShader: GLOW_VERT, fragmentShader: GRID_FRAG,
       uniforms: {
-        ...this.shared, uBase: { value: new T.Color(base) }, uLine: { value: new T.Color(line) }, uCell: { value: cell },
+        ...this.shared, ...(mirror || {}), uBase: { value: new T.Color(base) }, uLine: { value: new T.Color(line) }, uCell: { value: cell },
         uPulse: { value: 0 }, uPulseAt: { value: new T.Vector3() },
       },
     });
@@ -1203,6 +1400,8 @@ export class Stage {
       o.geometry?.dispose();
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
     });
+    this.preRender.clear();
+    this.mirrorTarget?.dispose();
     this.post?.dispose();
     this.renderer.dispose();
     // browsers allow only a handful of live WebGL contexts, so give this one back

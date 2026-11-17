@@ -328,42 +328,206 @@ function buildShip(S, c) {
 }
 
 // ---------- cyberpunk city ----------
+//
+// The runners are sculpted rather than stacked: every limb is a lathe (a profile
+// turned around its bone, then squashed to an oval), so muscles swell and taper
+// and the glossy armour shader has smooth curves to slide its highlights along.
+// The light lines are tubes laid on those same surfaces, so they follow the body
+// exactly as it bends. The pattern is the game's own: a double sash across the
+// chest, a spine line, lines down the outside of each limb, rings at the joints,
+// a hexagon at the belt and a glowing slit visor.
 
-const MY_RUNNER = { suit: '#232a66', dark: '#141838', glow: '#29f0ff' };
-const THEIR_RUNNER = { suit: '#4a1d26', dark: '#2a1016', glow: '#ff7a1a' };
+const MY_RUNNER = { suit: '#0b0d14', soft: '#07080c', glow: '#29f0ff' };
+const THEIR_RUNNER = { suit: '#120a0a', soft: '#0a0606', glow: '#ff5a12' };
 
-function discModel(S, color, fx) {
+/** A smooth radius profile through control points [radius, y], as lathe points. */
+function profile(T, ctrl, n = 22) {
+  return new T.SplineCurve(ctrl.map(([r, y]) => new T.Vector2(r, y))).getPoints(n);
+}
+
+/**
+ * A body part turned from a profile and squashed to an oval: sx front to back,
+ * sz side to side. Returns the mesh and at(angle, y, lift), a point on its skin
+ * (angle 0 faces forward, +x; pi/2 faces +z), for laying light lines on it.
+ */
+function part(S, parent, ctrl, material, { sx = 1, sz = 1, pos = [0, 0, 0], segments = 40 } = {}) {
+  const T = S.T;
+  const first = ctrl[0], last = ctrl[ctrl.length - 1];
+  const pts = [
+    new T.Vector2(0, first[1] - first[0] * 0.35),
+    ...profile(T, ctrl),
+    ...(last[0] > 0.01 ? [new T.Vector2(0, last[1] + last[0] * 0.35)] : []),
+  ];
+  const mesh = S.add(parent, new T.LatheGeometry(pts, segments), material, pos, null, [sx, 1, sz]);
+  const radiusAt = y => {
+    if (y <= pts[0].y) return pts[0].x;
+    for (let i = 1; i < pts.length; i++) {
+      if (y <= pts[i].y) {
+        const k = (y - pts[i - 1].y) / (pts[i].y - pts[i - 1].y || 1);
+        return pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k;
+      }
+    }
+    return pts[pts.length - 1].x;
+  };
+  const at = (angle, y, lift = 0.006) => {
+    const r = radiusAt(y);
+    return new T.Vector3(pos[0] + (r * sx + lift) * Math.cos(angle), pos[1] + y, pos[2] + (r * sz + lift) * Math.sin(angle));
+  };
+  return { mesh, at };
+}
+
+/** A glowing tube through points. closed makes a ring. */
+function lightLine(S, parent, points, material, { radius = 0.0075, closed = false } = {}) {
+  const T = S.T;
+  const curve = new T.CatmullRomCurve3(points, closed, 'centripetal');
+  return S.add(parent, new T.TubeGeometry(curve, Math.max(12, points.length * 10), radius, 6, closed), material);
+}
+
+/** Points along a path over a part's skin: [[angle, y], ...] at each step. */
+const along = (p, path, lift) => path.map(([a, y]) => p.at(a, y, lift));
+/** A ring around a part at height y. */
+const ringAt = (p, y, lift, n = 24) => Array.from({ length: n }, (_, i) => p.at((i / n) * Math.PI * 2, y, lift));
+
+/**
+ * The light disc: a glossy dark body, a glowing rim and an inner ring. The armour
+ * material is shared with the runner, so it flashes and fades with them.
+ */
+function discModel(S, color, fx, body = null) {
   const T = S.T;
   const g = new T.Group();
-  S.add(g, new T.TorusGeometry(0.2, 0.034, 8, 28), S.light(color, { fx, power: 1.6 }));
-  S.add(g, new T.CircleGeometry(0.17, 24), S.light(color, { fx, power: 1, opacity: 0.3, additive: true }));
+  const shell = body || S.armor('#0a0b10', { fx, rim: color, rimStrength: 0.5, gloss: 140 });
+  const neon = S.light(color, { fx, power: 1.7 });
+  // the disc lies in the group's x-y plane, like the old flat ring did
+  S.add(g, new T.CylinderGeometry(0.19, 0.19, 0.028, 40), shell, null, [Math.PI / 2, 0, 0]);
+  S.add(g, new T.CylinderGeometry(0.07, 0.07, 0.04, 24), shell, null, [Math.PI / 2, 0, 0]);
+  S.add(g, new T.TorusGeometry(0.195, 0.014, 8, 48), neon);
+  S.add(g, new T.TorusGeometry(0.12, 0.006, 6, 40), neon, [0, 0, 0.016]);
+  S.add(g, new T.TorusGeometry(0.12, 0.006, 6, 40), neon, [0, 0, -0.016]);
+  S.add(g, new T.CircleGeometry(0.19, 32), S.light(color, { fx, power: 0.9, opacity: 0.18, additive: true }));
   return g;
 }
 
+/**
+ * A runner about 1.8 tall with the same joints as figure() (so Rig and the poses
+ * drive it unchanged): hips at 0.88, shoulders 0.52 up the torso and 0.27 out,
+ * elbows and hands 0.32 apart, hips 0.11 out, knees 0.43 down.
+ */
 function buildRunner(S, c) {
   const T = S.T;
   const fx = S.fx();
-  const suit = S.toon(c.suit, { fx, rim: c.glow, rimStrength: 0.6 });
-  const dark = S.toon(c.dark, { fx, rim: c.glow, rimStrength: 0.45 });
-  const neon = S.light(c.glow, { fx, power: 1.5 });
-  const f = figure(S, { body: suit, arms: suit, legs: dark, head: dark, hands: dark, feet: dark });
+  const glow = c.glow;
+  const shell = S.armor(c.suit, { fx, rim: glow, rimStrength: 0.35, gloss: 120, reflect: 1.1 });
+  const plate = S.armor(c.suit, { fx, rim: glow, rimStrength: 0.3, gloss: 160, reflect: 1.25, spec: 1.2 });
+  const weave = S.armor(c.soft, { fx, rim: glow, rimStrength: 0.25, gloss: 40, reflect: 0.45, spec: 0.5, mesh: true });
+  const visor = S.armor('#020205', { fx, rim: glow, rimStrength: 0.4, gloss: 220, reflect: 1.6, spec: 1.4 });
+  // just bright enough to bloom without the bloom bleaching the colour to white
+  const neon = S.light(glow, { fx, power: 1.35 });
+  const LIFT = 0.007;
+
+  const root = new T.Group();
+  const lean = S.group(root);
+  const hips = S.group(lean, [0, 0.88, 0]);
+  const torso = S.group(hips);
+
+  // ---- trunk ----
+  const pelvis = part(S, hips, [[0.11, -0.14], [0.155, -0.09], [0.168, 0.0], [0.152, 0.07]], shell, { sx: 0.84, sz: 1.14 });
+  part(S, torso, [[0.145, 0.02], [0.136, 0.1], [0.146, 0.18], [0.16, 0.24]], weave, { sx: 0.82, sz: 1.1 });
+  const chest = part(S, torso, [[0.148, 0.17], [0.18, 0.26], [0.205, 0.36], [0.212, 0.45], [0.19, 0.52], [0.12, 0.575], [0.06, 0.6]], plate, { sx: 0.8, sz: 1.32 });
+  // the back plate stands a little proud, like a carapace
+  part(S, torso, [[0.13, 0.26], [0.18, 0.33], [0.192, 0.43], [0.16, 0.51]], shell, { sx: 0.84, sz: 1.22, pos: [-0.03, 0, 0] });
+  S.add(torso, new T.CylinderGeometry(0.056, 0.07, 0.1, 24), weave, [0.01, 0.62, 0]);
+  const head = S.group(torso, [0.02, 0.66, 0]);
+
+  // ---- helmet: a rounded shell, a dark mirror visor, a glowing slit and a low crest ----
+  S.add(head, new T.SphereGeometry(0.135, 40, 28), shell, [0, 0.11, 0], null, [1.08, 1.16, 0.95]);
+  S.add(head, new T.SphereGeometry(0.142, 48, 24, Math.PI - 1.15, 2.3, 1.2, 0.62), visor, [0.008, 0.11, 0], null, [1.1, 1.16, 0.96]);
+  const onHelmet = (phi, th, r = 0.148) => new T.Vector3(-Math.cos(phi) * Math.sin(th) * r * 1.1, 0.11 + Math.cos(th) * r * 1.16, Math.sin(phi) * Math.sin(th) * r * 0.96);
+  const slit = [];
+  for (let i = 0; i <= 20; i++) slit.push(onHelmet(Math.PI - 0.9 + (i / 20) * 1.8, 1.5));
+  lightLine(S, head, slit, neon, { radius: 0.0075 });
+  // a thin lit edge along the top of the visor, sweeping back towards the ears
+  const brow = [];
+  for (let i = 0; i <= 20; i++) brow.push(onHelmet(Math.PI - 1.1 + (i / 20) * 2.2, 1.2 + Math.abs(i / 10 - 1) * 0.12, 0.146));
+  lightLine(S, head, brow, neon, { radius: 0.004 });
+  S.add(head, new T.BoxGeometry(0.2, 0.025, 0.03), plate, [-0.01, 0.27, 0], [0, 0, -0.15]);
+
+  // ---- light lines on the trunk ----
+  // a double sash across the chest, from the near shoulder down to the far hip
+  for (const off of [0, 0.06]) {
+    lightLine(S, torso, along(chest, [[1.15, 0.5 - off], [0.55, 0.43 - off], [0, 0.36 - off], [-0.55, 0.29 - off], [-1.05, 0.22 - off * 0.6]], LIFT), neon);
+  }
+  lightLine(S, torso, ringAt(chest, 0.55, LIFT), neon); // collar
+  lightLine(S, torso, along(chest, [[Math.PI, 0.2], [Math.PI, 0.32], [Math.PI, 0.44], [Math.PI, 0.53]], LIFT), neon); // spine
+  for (const side of [1, -1]) {
+    lightLine(S, torso, along(chest, [[side * 1.6, 0.21], [side * 1.62, 0.3], [side * 1.58, 0.4]], LIFT), neon); // ribs
+  }
+  // belt, with a hexagon at the buckle
+  lightLine(S, hips, ringAt(pelvis, 0.035, LIFT), neon, { closed: true, radius: 0.0065 });
+  const buckle = pelvis.at(0, 0.0, 0.012);
+  const hex = Array.from({ length: 6 }, (_, i) => new T.Vector3(buckle.x, buckle.y + Math.cos(i * Math.PI / 3) * 0.032, buckle.z + Math.sin(i * Math.PI / 3) * 0.032));
+  lightLine(S, hips, hex, neon, { closed: true, radius: 0.006 });
+
+  // ---- arms ----
+  const arm = side => {
+    const shoulder = S.group(torso, [0, 0.52, side * 0.27]);
+    // a pauldron cap over the shoulder, its rim lit
+    S.add(shoulder, new T.SphereGeometry(0.115, 40, 18, 0, Math.PI * 2, 0, Math.PI * 0.46), plate, [0, 0.025, 0], null, [1.15, 0.78, 1.05]);
+    const rim = Array.from({ length: 24 }, (_, i) => {
+      const a = (i / 24) * Math.PI * 2;
+      const th = Math.PI * 0.46;
+      return new T.Vector3(-Math.cos(a) * Math.sin(th) * 0.117 * 1.15, 0.025 + Math.cos(th) * 0.117 * 0.78, Math.sin(a) * Math.sin(th) * 0.117 * 1.05);
+    });
+    lightLine(S, shoulder, rim, neon, { closed: true, radius: 0.006 });
+    const upper = part(S, shoulder, [[0.054, -0.34], [0.062, -0.27], [0.078, -0.15], [0.078, -0.06], [0.07, 0.02]], shell, { sx: 1.0, sz: 0.92, segments: 36 });
+    S.add(shoulder, new T.SphereGeometry(0.056, 24, 16), weave, [0, -0.32, 0]);
+    const elbow = S.group(shoulder, [0, -0.32, 0]);
+    const fore = part(S, elbow, [[0.042, -0.3], [0.05, -0.25], [0.064, -0.14], [0.062, -0.05], [0.054, 0.02]], plate, { sx: 1.05, sz: 0.9, segments: 36 });
+    // lines down the outside of the arm, a ring at the elbow and a lit cuff at the wrist
+    const out = side * Math.PI / 2;
+    lightLine(S, shoulder, along(upper, [[out, -0.03], [out + side * 0.15, -0.14], [out, -0.27]], LIFT), neon);
+    lightLine(S, elbow, along(fore, [[out, -0.03], [out - side * 0.25, -0.15], [out - side * 0.5, -0.24]], LIFT), neon);
+    lightLine(S, elbow, ringAt(fore, -0.25, LIFT), neon, { closed: true, radius: 0.007 });
+    const hand = S.group(elbow, [0, -0.32, 0]);
+    S.add(hand, new T.CapsuleGeometry(0.038, 0.05, 8, 18), shell, [0, -0.015, 0], null, [1.15, 1, 0.75]);
+    S.add(hand, new T.CapsuleGeometry(0.026, 0.045, 6, 14), weave, [0.012, -0.075, 0], null, [1.3, 1, 0.8]);
+    return { shoulder, elbow, hand };
+  };
+
+  // ---- legs ----
+  const leg = side => {
+    const hip = S.group(hips, [0, -0.03, side * 0.11]);
+    const thigh = part(S, hip, [[0.064, -0.45], [0.074, -0.38], [0.094, -0.25], [0.104, -0.12], [0.1, 0.02]], shell, { sx: 1.05, sz: 0.95, segments: 36 });
+    const knee = S.group(hip, [0, -0.43, 0]);
+    S.add(knee, new T.SphereGeometry(0.058, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.6), plate, [0.042, 0.0, 0], [0, 0, -Math.PI / 2], [0.9, 0.7, 1]);
+    S.add(knee, new T.SphereGeometry(0.064, 24, 16), weave);
+    const shin = part(S, knee, [[0.05, -0.39], [0.056, -0.34], [0.072, -0.24], [0.074, -0.13], [0.066, 0.01]], plate, { sx: 1.08, sz: 0.92, segments: 36 });
+    // a line down the front of each thigh and shin, rings below the knee and at the ankle
+    const front = side * 0.35;
+    lightLine(S, hip, along(thigh, [[front, -0.05], [front + side * 0.1, -0.2], [front, -0.38]], LIFT), neon);
+    lightLine(S, knee, along(shin, [[front * 0.6, -0.06], [0, -0.2], [-front * 0.4, -0.34]], LIFT), neon);
+    lightLine(S, knee, ringAt(shin, -0.08, LIFT), neon, { closed: true, radius: 0.0065 });
+    lightLine(S, knee, ringAt(shin, -0.355, LIFT), neon, { closed: true, radius: 0.0065 });
+    // a boot: a rounded toe and heel, with a lit sole edge
+    S.add(knee, new T.CapsuleGeometry(0.046, 0.16, 8, 20), shell, [0.05, -0.415, 0], [0, 0, Math.PI / 2], [1, 0.82, 1.1]);
+    const sole = Array.from({ length: 20 }, (_, i) => {
+      const a = (i / 20) * Math.PI * 2;
+      return new T.Vector3(0.05 + Math.cos(a) * 0.125, -0.448, Math.sin(a) * 0.05);
+    });
+    lightLine(S, knee, sole, neon, { closed: true, radius: 0.0055 });
+    return { hip, knee };
+  };
+
+  const aim = S.group(torso, [0.1, 0.35, 0]);
+  const f = { root, lean, hips, torso, head, aim, nearArm: arm(1), farArm: arm(-1), nearLeg: leg(1), farLeg: leg(-1) };
   f.root.rotation.y = -0.45; // turned a little towards the camera
 
-  const band = (parent, radius, y, squash) => S.add(parent, new T.TorusGeometry(radius, 0.013, 6, 20), neon, [0, y, 0], [Math.PI / 2, 0, 0], squash);
-  band(f.torso, 0.176, 0.1, [0.85, 1.25, 1]);
-  band(f.torso, 0.186, 0.42, [0.85, 1.25, 1]);
-  for (const arm of [f.nearArm, f.farArm]) { band(arm.shoulder, 0.07, -0.2); band(arm.elbow, 0.061, -0.2); }
-  for (const leg of [f.nearLeg, f.farLeg]) { band(leg.hip, 0.093, -0.24); band(leg.knee, 0.076, -0.24); }
-  S.add(f.head, new T.BoxGeometry(0.06, 0.05, 0.27), neon, [0.14, 0.13, 0]);
-  S.add(f.torso, new T.BoxGeometry(0.02, 0.26, 0.03), neon, [0.15, 0.3, 0]);
-
-  const disc = discModel(S, c.glow, fx);
+  const disc = discModel(S, glow, fx, shell);
   disc.position.set(0.06, -0.06, 0);
   f.nearArm.hand.add(disc);
   const rig = new Rig(S, f);
 
   S.every((dt, t) => { if (dt > 0) disc.rotation.z = t * 1.2; });
-  return { ...f, fx, disc, rig, glow: c.glow };
+  return { ...f, fx, disc, rig, glow, shell, neon };
 }
 
 // ---------- jungle tomb ----------
@@ -464,6 +628,6 @@ export {
   rad, rand, other, seeded, away, impactFeel,
   figure, Rig, READY, BRACE, WIND, THROW, CHEER, throwBeat,
   buildShip, MY_SHIP, THEIR_SHIP, HULL_LENGTH,
-  discModel, buildRunner, MY_RUNNER, THEIR_RUNNER,
+  discModel, buildRunner, MY_RUNNER, THEIR_RUNNER, part, lightLine, along, ringAt,
   spearModel, buildGorilla, APE_READY, APE_GRAB, APE_WIND, APE_THROW, APE_BEAT, APE_COWER,
 };
